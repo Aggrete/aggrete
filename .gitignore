@@ -5,3 +5,5 @@ audit.jsonl
 .claude/settings.local.json
 *.pyc
 coc.draft.yaml
+build/
+*.egg-info/

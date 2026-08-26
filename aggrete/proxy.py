@@ -7,7 +7,7 @@ tools/call against accumulated state before and after execution.
 
     python -m aggrete.proxy --config proxy.config.yaml --transport streamable-http --port 8080
 
-Identity: over stdio the user is `user:` from the config — whoever launched
+Identity: over stdio the user is `user:` from the config. Whoever launched
 the process, advisory only. Over streamable HTTP every request must carry a
 bearer token; the user is derived from its claims (see auth.py) and nothing in
 the config can override it.
@@ -55,7 +55,7 @@ def expand_env(value: str) -> str:
 
 class Audit:
     """Every tool call, its labels, and the decision. This is the record you
-    will actually want later — prompts tell you what was asked, this tells you
+    will actually want later. Prompts tell you what was asked, this tells you
     what was handed over."""
 
     def __init__(self, path: str | None):
@@ -232,7 +232,7 @@ def build_http_app(server: Server, cfg: dict, connect):
 
     auth_cfg = cfg.get("auth")
     if not auth_cfg:
-        raise SystemExit("streamable-http requires an `auth:` block — identity must come from a token")
+        raise SystemExit("streamable-http requires an `auth:` block. Identity must come from a token")
     verifier = build_verifier(auth_cfg)
     http_cfg = cfg.get("http", {})
     manager = StreamableHTTPSessionManager(

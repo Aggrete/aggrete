@@ -1,3 +1,0 @@
-[console_scripts]
-aggrete = aggrete.proxy:cli
-aggrete-ingest = aggrete.ingest:main

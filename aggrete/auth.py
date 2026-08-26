@@ -2,10 +2,10 @@
 
 Two verifiers:
 
-- JWTVerifier   — production. Validates RS256/ES256 JWTs from your IdP (Okta,
+- JWTVerifier. Production. Validates RS256/ES256 JWTs from your IdP (Okta,
                   Entra, Google, Auth0, Keycloak…) against its JWKS, checks
                   issuer/audience/expiry, and derives the user from a claim.
-- StaticTokens  — development and tests. A fixed token → subject map.
+- StaticTokens. Development and tests. A fixed token → subject map.
 
 The identity the policy engine sees is `identity_for(token)`: the configured
 claim (default `email`, falling back to `sub`). Per-user state in the

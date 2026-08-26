@@ -1,4 +1,4 @@
-"""Compiles coc.yaml into decisions. No model in this path — deterministic only."""
+"""Compiles coc.yaml into decisions. No model in this path. Deterministic only."""
 
 from __future__ import annotations
 

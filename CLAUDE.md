@@ -1,4 +1,4 @@
-# Aggrete — working notes
+# Aggrete. Working notes
 
 An MCP proxy enforcing a code-of-conduct document across connectors, with
 per-user state that accumulates across calls and sessions (Layer 4).
@@ -18,7 +18,7 @@ own interpreter for upstreams declared as `python`/`python3`, so setting it in
 
 ## Registering with Claude Code
 
-`.mcp.json` in the project root is picked up automatically — `/mcp` lists
+`.mcp.json` in the project root is picked up automatically. `/mcp` lists
 `aggrete` and its five namespaced tools. Approve the server once when
 prompted. To use it outside this directory:
 
@@ -36,7 +36,7 @@ remediation path rather than an error.
 
 | Path | Role |
 |---|---|
-| `coc.yaml` | source of truth — clause text, enforcement, tests |
+| `coc.yaml` | source of truth. Clause text, enforcement, tests |
 | `aggrete/policy.py` | deterministic evaluation; no model in this path |
 | `aggrete/accumulator.py` | per-user state, TTL'd; `MemoryStore` / `RedisStore` |
 | `aggrete/entities.py` | person-ID extraction from tool results |
@@ -46,7 +46,7 @@ remediation path rather than an error.
 | `aggrete/auth.py` | bearer-token verification (JWT via JWKS/PEM, or static dev tokens) → user identity |
 | `proxy.config.yaml` | tool-pattern → domain mapping, upstream wiring (`command:` stdio or `url:` streamable HTTP; header values may use `${ENV_VAR}`) |
 | `demo/mock_server.py` | fake HR / finance / ops connectors (`--transport streamable-http` for HTTP) |
-| `aggrete/ingest.py` | document (PDF/DOCX/MD) → draft `coc.yaml` via Claude; verifies drafts through `Engine` |
+| `aggrete/ingest.py` | document (PDF/DOCX/MD) → draft `coc.yaml` via the configured model; verifies drafts through `Engine` |
 
 ## Conventions
 
@@ -61,11 +61,11 @@ remediation path rather than an error.
 
 ## Known gaps (in priority order)
 
-1. `entities.py` — tune `EMAIL_KEYS`/`ID_KEYS` against real connector payloads. Identifiers on one JSON object collapse to one person (email preferred as the canonical key so it matches across connectors); records that carry only a source-system ID will not link to email-only records from another connector without an external identity map.
+1. `entities.py`. Tune `EMAIL_KEYS`/`ID_KEYS` against real connector payloads. Identifiers on one JSON object collapse to one person (email preferred as the canonical key so it matches across connectors); records that carry only a source-system ID will not link to email-only records from another connector without an external identity map.
    Every threshold in `coc.yaml` is only as good as this function.
 2. Identity: solved for HTTP (`--transport streamable-http` requires `auth:`;
    user derived from the token, see `aggrete/auth.py`). stdio identity remains
-   advisory by design — use it only on a single laptop.
+   advisory by design. Use it only on a single laptop.
 3. Multi-replica via `store: {redis_url}` + Helm; no multi-tenancy or token
    vault. To embed in agentgateway / ContextForge use `aggrete/plugin.py`
    (their native plugin manifests still need writing against their current APIs).

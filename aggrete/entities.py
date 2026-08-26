@@ -1,14 +1,14 @@
 """Pull stable person identifiers out of whatever a connector hands back.
 
 This function is where this whole design succeeds or fails. Names are not
-identifiers — prefer source-system IDs, then email, and treat free text as a
+identifiers. Prefer source-system IDs, then email, and treat free text as a
 last resort. Tune `IDENTIFIER_KEYS` against your own connectors before trusting
 any threshold you set in coc.yaml.
 
 Linking: one JSON object that carries several identifier fields (e.g. both
 `email` and `employee_id`) is ONE person and yields ONE canonical key. Email is
 preferred as the canonical form because it is the identifier most likely to be
-shared across connectors — cross-domain overlap (COC-HR-004) only works when
+shared across connectors. Cross-domain overlap (COC-HR-004) only works when
 both sides produce the same key. When a record has no email the first ID field
 found (in `ID_KEYS` order) is used instead.
 """

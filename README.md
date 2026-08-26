@@ -29,7 +29,7 @@ turn 4  ops__oncall_draft         DENIED    COC-HR-004
 ```
 
 Turn 4 is denied **before the upstream call**, so the on-call data is never
-fetched — the two domains already held overlap on the same people, and this call
+fetched. The two domains already held overlap on the same people, and this call
 would complete the forbidden set.
 
 ## The document is the source of truth
@@ -57,11 +57,11 @@ tests. Engineering owns the compiler, not the policy.
 ```
 
 CI fails any rule without both an allow and a deny test. Clauses that compile to
-nothing are worth finding — those are the parts of your code of conduct that were
+nothing are worth finding. Those are the parts of your code of conduct that were
 never enforceable.
 
 Rule types: `domain_join`, `entity_budget`, `domain_block`, `self_comparison`
-(the requester's own record plus colleagues' records in one domain — the
+(the requester's own record plus colleagues' records in one domain. The
 precondition for "how do I compare"; decided post-call, since the colleague
 records have to be seen to be counted). Actions: `deny`, `alert`. Start everything at `alert`, tune against real traffic, then flip.
 
@@ -75,11 +75,11 @@ client ──MCP──▶ proxy ──MCP──▶ hr / finance / ops connectors
                   └─ audit      what was handed over, not just what was asked
 ```
 
-- `aggrete/policy.py` — deterministic evaluation. No model in this path.
-- `aggrete/accumulator.py` — per-user state, TTL'd. `MemoryStore` for tests,
+- `aggrete/policy.py`. Deterministic evaluation. No model in this path.
+- `aggrete/accumulator.py`. Per-user state, TTL'd. `MemoryStore` for tests,
   `RedisStore` for deployment, because state must be shared across clients.
-- `aggrete/entities.py` — pulls stable person IDs out of tool results.
-- `proxy.config.yaml` — maps tool name patterns to the domains clauses refer to.
+- `aggrete/entities.py`. Pulls stable person IDs out of tool results.
+- `proxy.config.yaml`. Maps tool name patterns to the domains clauses refer to.
 
 ### Remote connectors
 
@@ -111,13 +111,13 @@ python -m aggrete.proxy --config proxy.config.yaml --transport streamable-http -
 
 HTTP mode refuses to start without an `auth:` block. In `jwt` mode it validates
 bearer JWTs from your IdP (issuer, audience, expiry, signature via JWKS,
-required scopes) and derives the user from the `email` claim — configurable
+required scopes) and derives the user from the `email` claim. Configurable
 with `identity_claim`. Every request without a valid token is a 401 with an
 RFC 9728 `WWW-Authenticate` pointer, and the `user:` line in the config is
 ignored entirely. `static` mode (fixed tokens) exists for development and the
 test-suite. The accumulator keys state on the token identity, so the same
 person hitting Aggrete from Claude Code, Claude.ai and Cursor shares one
-history — which is the point.
+history. Which is the point.
 
 Register it in a client as a remote MCP server at `https://<host>/mcp` with
 the bearer token your IdP issues; keep the connectors themselves reachable
@@ -126,7 +126,7 @@ only from the Aggrete host.
 ## Inside a gateway you already run
 
 If agentgateway, IBM ContextForge, Kong or your own gateway is already the
-control plane, don't add a second one — embed Aggrete:
+control plane, don't add a second one. Embed Aggrete:
 
 ```python
 from aggrete.plugin import PolicyHook, AggreteMiddleware
@@ -164,9 +164,9 @@ python -m aggrete.ingest handbook.pdf --domains proxy.config.yaml -o coc.draft.y
 PDFs go to the model as native document blocks; DOCX, Markdown and text as
 text. The model proposes rules in the exact `coc.yaml` schema with clause text
 verbatim, every action forced to `alert`, and each rule's own tests are run
-through the real `Engine` before the file is written — a draft that fails its
+through the real `Engine` before the file is written. A draft that fails its
 tests is rejected. Clauses no data proxy can enforce (tone, harassment,
-expenses) are listed separately with the reason. Needs `ANTHROPIC_API_KEY`
+expenses) are listed separately with the reason. Model set by `AGGRETE_INGEST_MODEL`. Needs `ANTHROPIC_API_KEY`
 or an `ant auth login` profile.
 
 ## Purpose binding
