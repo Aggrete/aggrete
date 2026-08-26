@@ -1,0 +1,13 @@
+{{- if not .Values.existingConfigMap }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "aggrete.fullname" . }}
+  labels: {{- include "aggrete.labels" . | nindent 4 }}
+data:
+  coc.yaml: |
+{{ .Values.coc | indent 4 }}
+  proxy.config.yaml: |
+    coc: /etc/aggrete/coc.yaml
+{{ merge (dict "auth" .Values.auth "store" (dict "redis_url" "${REDIS_URL}") "http" (dict "allowed_hosts" (list .Values.ingress.host))) .Values.config | toYaml | indent 4 }}
+{{- end }}

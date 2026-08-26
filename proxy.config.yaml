@@ -19,6 +19,9 @@ user: christian@example.com        # stdio only. Ignored over HTTP: identity com
 #   mode: static
 #   tokens:
 #     dev-token-alice: {subject: alice@example.com}
+# Shared state across replicas (required for more than one instance):
+# store:
+#   redis_url: ${REDIS_URL}
 # http:
 #   allowed_hosts: [aggrete.internal.example.com]
 #   session_idle_timeout: 1800

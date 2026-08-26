@@ -1,0 +1,51 @@
+image:
+  repository: ghcr.io/cjohannsen81/aggrete
+  tag: ""            # defaults to appVersion
+  pullPolicy: IfNotPresent
+replicaCount: 2
+
+# --- policy -------------------------------------------------------------
+# The code of conduct in machine-enforceable form. Put your own here or set
+# existingConfigMap to a ConfigMap holding `coc.yaml` and `proxy.config.yaml`.
+existingConfigMap: ""
+coc: |
+  version: 1
+  defaults: {window: 24h, entity_kind: person}
+  rules: []
+config:
+  audit_log: /var/lib/aggrete/audit.jsonl
+  domains: {}
+  default_domain: unclassified
+  deny_tools: []
+  upstreams: {}        # name: {url: https://..., headers: {Authorization: "Bearer ${TOKEN}"}}
+
+# --- identity -----------------------------------------------------------
+auth:
+  mode: jwt
+  issuer: https://login.example.com/
+  audience: https://aggrete.example.com/mcp
+  jwks_url: ""         # default <issuer>/.well-known/jwks.json
+  required_scopes: [mcp]
+  identity_claim: email
+  resource_url: https://aggrete.example.com/mcp
+
+# --- state --------------------------------------------------------------
+redis:
+  enabled: true        # bundled single-node Redis; for HA point externalUrl at your own
+  externalUrl: ""      # e.g. redis://:pass@redis.internal:6379/0 (used when enabled=false)
+  image: redis:7-alpine
+
+# Env vars available to ${VAR} references in config (upstream tokens etc.)
+env: {}                # OPS_MCP_TOKEN: {secretKeyRef: {name: aggrete-upstreams, key: ops}}
+
+service: {type: ClusterIP, port: 8080}
+ingress:
+  enabled: false
+  className: ""
+  host: aggrete.example.com
+  tls: true
+  annotations: {}
+resources:
+  requests: {cpu: 100m, memory: 128Mi}
+  limits: {cpu: "1", memory: 512Mi}
+podAnnotations: {}

@@ -1,0 +1,29 @@
+{{- if .Values.redis.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "aggrete.fullname" . }}-redis
+  labels: {{- include "aggrete.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector: {matchLabels: {app.kubernetes.io/name: {{ include "aggrete.name" . }}-redis, app.kubernetes.io/instance: {{ .Release.Name }}}}
+  template:
+    metadata:
+      labels: {app.kubernetes.io/name: {{ include "aggrete.name" . }}-redis, app.kubernetes.io/instance: {{ .Release.Name }}}
+    spec:
+      containers:
+        - name: redis
+          image: {{ .Values.redis.image }}
+          args: ["--save", "", "--appendonly", "no"]   # state is TTL'd; durability is not required
+          ports: [{name: redis, containerPort: 6379}]
+          resources: {requests: {cpu: 50m, memory: 64Mi}, limits: {memory: 256Mi}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "aggrete.fullname" . }}-redis
+  labels: {{- include "aggrete.labels" . | nindent 4 }}
+spec:
+  selector: {app.kubernetes.io/name: {{ include "aggrete.name" . }}-redis, app.kubernetes.io/instance: {{ .Release.Name }}}
+  ports: [{name: redis, port: 6379, targetPort: redis}]
+{{- end }}
