@@ -1,0 +1,4 @@
+mcp>=2.0
+pyyaml
+pytest
+anthropic>=1.0

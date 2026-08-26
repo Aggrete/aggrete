@@ -1,0 +1,100 @@
+# Code of Conduct — machine-enforceable form.
+#
+# This file is the source of truth. Clause text is written by the clause owner
+# (HR, Legal, Security), not by engineering. Every rule must carry at least one
+# allow test and one deny test or CI fails (see tests/test_coc.py).
+
+version: 1
+
+defaults:
+  window: 24h
+  entity_kind: person
+
+rules:
+  - rule_id: COC-HR-004
+    clause: >
+      Personnel records, compensation or budget records, and operational
+      rosters may not be combined to derive the employment status,
+      performance, or planned departure of identifiable individuals.
+    owner: hr-privacy@example.com
+    severity: high
+    remediation: >
+      If this is sanctioned workforce planning, request a purpose-bound
+      session from HR Privacy. It is granted for four hours and every
+      retrieval made under it is logged against the stated purpose.
+    enforce:
+      - layer: accumulation
+        action: deny
+        type: domain_join
+        domains: [hr-personnel, finance-comp, ops-rota]
+        require_entity_overlap: true
+        scope: user
+        window: 4h
+    tests:
+      - name: four_prompt_layoff_list
+        expect: deny
+        sequence:
+          - {domain: finance-planning, entities: []}
+          - {domain: finance-comp, entities: [p:alice, p:bob, p:carol]}
+          - {domain: hr-personnel, entities: [p:alice, p:bob, p:carol, p:dan]}
+          - {domain: ops-rota, entities: [p:alice, p:dan]}
+      - name: two_domains_only_is_fine
+        expect: allow
+        sequence:
+          - {domain: finance-comp, entities: [p:alice, p:bob]}
+          - {domain: ops-rota, entities: [p:alice, p:bob]}
+      - name: three_domains_no_shared_people
+        expect: allow
+        sequence:
+          - {domain: finance-comp, entities: [p:alice]}
+          - {domain: hr-personnel, entities: [p:erin]}
+          - {domain: ops-rota, entities: [p:frank]}
+
+  - rule_id: COC-HR-011
+    clause: >
+      Assistants may not be used to assemble rosters or lists of individuals
+      from personnel systems beyond what a single task requires.
+    owner: hr-privacy@example.com
+    severity: medium
+    remediation: >
+      Bulk personnel extracts go through People Analytics, who can scope the
+      export to the question being asked.
+    enforce:
+      - layer: accumulation
+        action: alert          # alert first; flip to deny once tuned
+        type: entity_budget
+        domain: hr-personnel
+        max_distinct: 8
+        scope: user
+        window: 24h
+    tests:
+      - name: small_lookup_is_fine
+        expect: allow
+        sequence:
+          - {domain: hr-personnel, entities: [p:alice, p:bob]}
+      - name: roster_reconstruction_alerts
+        expect: alert
+        sequence:
+          - {domain: hr-personnel, entities: [p:a, p:b, p:c, p:d, p:e, p:f, p:g, p:h, p:i]}
+
+  - rule_id: COC-LEGAL-001
+    clause: >
+      Content under legal hold is not available to assistants under any
+      circumstances, including to users who can otherwise open it.
+    owner: legal-ops@example.com
+    severity: critical
+    remediation: Contact Legal Ops. This restriction is not waivable in-product.
+    enforce:
+      - layer: retrieval
+        action: deny
+        type: domain_block
+        domains: [legal-hold]
+    tests:
+      - name: legal_hold_blocked
+        expect: deny
+        sequence:
+          - {domain: legal-hold, entities: []}
+      - name: ordinary_domain_allowed
+        expect: allow
+        sequence:
+          - {domain: ops-rota, entities: [p:alice]}
