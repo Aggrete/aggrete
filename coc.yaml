@@ -98,3 +98,42 @@ rules:
         expect: allow
         sequence:
           - {domain: ops-rota, entities: [p:alice]}
+
+  - rule_id: COC-HR-021
+    clause: >
+      Records of colleagues' working time, attendance or output may not be
+      used to benchmark or compare individuals against one another, including
+      against oneself, outside a sanctioned review.
+    owner: hr-privacy@example.com
+    severity: medium
+    remediation: >
+      Approving or reviewing your team's timesheets is fine and does not
+      trigger this rule. If you need a comparison for a sanctioned review,
+      ask HR Privacy for a purpose-bound session; it lasts four hours and
+      every retrieval is logged against the stated purpose.
+    enforce:
+      - layer: accumulation
+        action: deny
+        type: self_comparison       # own record + colleagues' records, same domain
+        domain: timesheets
+        scope: user
+        window: 24h
+    tests:
+      - name: manager_reviews_team_only
+        expect: allow
+        sequence:
+          - {domain: timesheets, entities: [p:alice, p:bob, p:carol]}
+      - name: own_timesheet_only
+        expect: allow
+        sequence:
+          - {domain: timesheets, entities: [p:self]}
+      - name: own_plus_colleagues_is_a_comparison
+        expect: deny
+        sequence:
+          - {domain: timesheets, entities: [p:alice, p:bob]}
+          - {domain: timesheets, entities: [p:self]}
+      - name: colleagues_after_own_is_also_a_comparison
+        expect: deny
+        sequence:
+          - {domain: timesheets, entities: [p:self]}
+          - {domain: timesheets, entities: [p:alice]}

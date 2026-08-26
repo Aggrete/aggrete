@@ -34,6 +34,10 @@ Rule types the engine implements (nothing else is enforceable):
   people from one `domain` within `window`. Use for "no rosters / bulk lists".
 - domain_block: deny any access to the listed `domains`, before fetching.
   Use for "never available to assistants" (legal hold, board materials).
+- self_comparison: alert/deny when a user's own record AND colleagues' records
+  from one `domain` have both been seen within `window`. Use for "may not be
+  used to compare or benchmark individuals" (timesheets, performance, pay).
+  In tests, `p:self` stands for the requesting user.
 Clauses that need none of these — tone, harassment, expense etiquette — are
 not enforceable at a data proxy: return them in `unenforceable` with a reason.
 """
@@ -58,7 +62,7 @@ SCHEMA = {
                             "properties": {
                                 "layer": {"type": "string", "enum": ["retrieval", "accumulation"]},
                                 "action": {"type": "string", "enum": ["alert", "deny"]},
-                                "type": {"type": "string", "enum": ["domain_join", "entity_budget", "domain_block"]},
+                                "type": {"type": "string", "enum": ["domain_join", "entity_budget", "domain_block", "self_comparison"]},
                                 "domains": {"type": "array", "items": {"type": "string"}},
                                 "domain": {"type": "string"},
                                 "require_entity_overlap": {"type": "boolean"},
@@ -201,7 +205,7 @@ def verify(coc: dict) -> list[str]:
             for step in t["sequence"]:
                 if not engine.pre_call(user, step["domain"]).allow:
                     outcome = "deny"; break
-                post = engine.post_call(user, step["domain"], step.get("entities", []))
+                post = engine.post_call(user, step["domain"], [f"p:{user}" if x == "p:self" else x for x in step.get("entities", [])])
                 if not post.allow:
                     outcome = "deny"; break
                 if post.alerts:

@@ -60,8 +60,10 @@ CI fails any rule without both an allow and a deny test. Clauses that compile to
 nothing are worth finding — those are the parts of your code of conduct that were
 never enforceable.
 
-Rule types: `domain_join`, `entity_budget`, `domain_block`. Actions: `deny`,
-`alert`. Start everything at `alert`, tune against real traffic, then flip.
+Rule types: `domain_join`, `entity_budget`, `domain_block`, `self_comparison`
+(the requester's own record plus colleagues' records in one domain — the
+precondition for "how do I compare"; decided post-call, since the colleague
+records have to be seen to be counted). Actions: `deny`, `alert`. Start everything at `alert`, tune against real traffic, then flip.
 
 ## How it works
 

@@ -51,6 +51,7 @@ domains:
   "finance__*": finance-comp
   "hr__*": hr-personnel
   "ops__*": ops-rota
+  # "drive__*": timesheets   # example: Google Drive connector holding team timesheets
 
 default_domain: unclassified
 
