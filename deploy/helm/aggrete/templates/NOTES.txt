@@ -1,0 +1,8 @@
+Aggrete is deployed. Register it in your assistants as a remote MCP server:
+
+  https://{{ .Values.ingress.host }}/mcp   (bearer token from {{ .Values.auth.issuer }})
+
+Keep the connectors listed under `config.upstreams` reachable only from this
+namespace. Policy lives in the `coc.yaml` key of ConfigMap
+{{ .Values.existingConfigMap | default (include "aggrete.fullname" .) }}; pods
+roll automatically when it changes.

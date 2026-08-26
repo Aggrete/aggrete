@@ -1,0 +1,16 @@
+mcp>=2.0
+pyyaml>=6
+pyjwt[crypto]>=2.8
+starlette>=0.40
+uvicorn>=0.30
+
+[dev]
+pytest
+redis>=5
+anthropic>=1.0
+
+[ingest]
+anthropic>=1.0
+
+[redis]
+redis>=5

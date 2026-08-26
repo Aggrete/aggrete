@@ -1,0 +1,46 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "aggrete.fullname" . }}
+  labels: {{- include "aggrete.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels: {{- include "aggrete.selector" . | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "aggrete.selector" . | nindent 8 }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}{{ toYaml . | nindent 8 }}{{ end }}
+    spec:
+      securityContext: {runAsNonRoot: true, runAsUser: 10001, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: aggrete
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["--transport", "streamable-http", "--host", "0.0.0.0", "--port", "8080"]
+          ports: [{name: http, containerPort: 8080}]
+          env:
+            - name: REDIS_URL
+              value: {{ include "aggrete.redisUrl" . | quote }}
+            {{- range $k, $v := .Values.env }}
+            - name: {{ $k }}
+              {{- if kindIs "map" $v }}
+              valueFrom: {{ toYaml $v | nindent 16 }}
+              {{- else }}
+              value: {{ $v | quote }}
+              {{- end }}
+            {{- end }}
+          volumeMounts:
+            - {name: config, mountPath: /etc/aggrete, readOnly: true}
+            - {name: data, mountPath: /var/lib/aggrete}
+          readinessProbe: {tcpSocket: {port: http}, initialDelaySeconds: 3, periodSeconds: 10}
+          livenessProbe: {tcpSocket: {port: http}, initialDelaySeconds: 10, periodSeconds: 20}
+          resources: {{- toYaml .Values.resources | nindent 12 }}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+      volumes:
+        - name: config
+          configMap: {name: {{ .Values.existingConfigMap | default (include "aggrete.fullname" .) }}}
+        - name: data
+          emptyDir: {}

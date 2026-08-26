@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aggrete"
+version = "0.1.0"
+description = "An MCP proxy that enforces your code of conduct across connectors. Permission is not need-to-know."
+readme = "README.md"
+license = { text = "Apache-2.0" }
+requires-python = ">=3.10"
+authors = [{ name = "Christian Johannsen" }]
+keywords = ["mcp", "model-context-protocol", "policy", "proxy", "gateway", "security", "aggregation"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Information Technology",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3",
+  "Topic :: Security",
+]
+dependencies = [
+  "mcp>=2.0",
+  "pyyaml>=6",
+  "pyjwt[crypto]>=2.8",
+  "starlette>=0.40",
+  "uvicorn>=0.30",
+]
+
+[project.optional-dependencies]
+redis = ["redis>=5"]
+ingest = ["anthropic>=1.0"]
+dev = ["pytest", "redis>=5", "anthropic>=1.0"]
+
+[project.scripts]
+aggrete = "aggrete.proxy:cli"
+aggrete-ingest = "aggrete.ingest:main"
+
+[project.urls]
+Homepage = "https://aggrete.com"
+Repository = "https://github.com/cjohannsen81/aggrete"
+
+[tool.setuptools.packages.find]
+include = ["aggrete*"]
