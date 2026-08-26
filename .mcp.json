@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "aggrete": {
+      "command": ".venv/bin/python",
+      "args": ["-m", "aggrete.proxy", "--config", "proxy.config.yaml"],
+      "env": {
+        "PYTHONPATH": "."
+      }
+    }
+  }
+}

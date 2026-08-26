@@ -1,0 +1,37 @@
+# Proxy wiring. The code of conduct says what is forbidden; this says which
+# tool traffic corresponds to which domain named in those clauses.
+
+coc: coc.yaml
+user: christian@example.com        # stdio only — over HTTP, take this from the OAuth subject
+audit_log: audit.jsonl
+
+upstreams:
+  hr:
+    command: python3
+    args: [demo/mock_server.py, --profile, hr]
+  finance:
+    command: python3
+    args: [demo/mock_server.py, --profile, finance]
+  ops:
+    command: python3
+    args: [demo/mock_server.py, --profile, ops]
+  # Remote connector over streamable HTTP. Header values may use ${ENV_VAR};
+  # the proxy holds the upstream credential, the end user never does.
+  # ops:
+  #   url: https://mcp.example.com/ops/mcp
+  #   headers:
+  #     Authorization: "Bearer ${OPS_MCP_TOKEN}"
+
+# Tool name (upstream__tool) -> domain used by coc.yaml rules.
+# Order matters: first match wins.
+domains:
+  "finance__headcount_plan": finance-planning
+  "finance__*": finance-comp
+  "hr__*": hr-personnel
+  "ops__*": ops-rota
+
+default_domain: unclassified
+
+# Layer 1 substitute: tools that are never exposed at all.
+deny_tools:
+  - "*__export_all*"
