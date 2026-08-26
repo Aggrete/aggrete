@@ -5,9 +5,12 @@ tools/call against accumulated state before and after execution.
 
     python -m aggrete.proxy --config proxy.config.yaml
 
-Identity note: over stdio the user is whoever launched the process, which is
-fine for per-user state but advisory as enforcement. A real deployment runs
-this over streamable HTTP with OAuth and takes the subject from the token.
+    python -m aggrete.proxy --config proxy.config.yaml --transport streamable-http --port 8080
+
+Identity: over stdio the user is `user:` from the config — whoever launched
+the process, advisory only. Over streamable HTTP every request must carry a
+bearer token; the user is derived from its claims (see auth.py) and nothing in
+the config can override it.
 """
 
 from __future__ import annotations
@@ -32,6 +35,7 @@ from mcp.shared._httpx_utils import create_mcp_http_client
 from mcp.server.lowlevel import Server
 from mcp.server.stdio import stdio_server
 
+from .auth import build_verifier, identity_for, unexpired
 from .entities import extract
 from .policy import Engine
 
@@ -72,7 +76,19 @@ class Proxy:
         self.engine = engine
         self.audit = audit
         self.sessions: dict[str, ClientSession] = {}
-        self.user = config.get("user", "unknown")
+        self.static_user = config.get("user", "unknown")
+        self.identity_claim = (config.get("auth") or {}).get("identity_claim")
+
+    @property
+    def user(self) -> str:
+        """Who the policy engine evaluates. Token first; config only when no token."""
+        from mcp.server.auth.middleware.auth_context import get_access_token
+        token = get_access_token()
+        if token is None:
+            return self.static_user
+        if not unexpired(token):
+            raise PermissionError("token expired")
+        return identity_for(token, self.identity_claim)
 
     def domain_for(self, tool: str) -> str:
         for pattern, domain in self.cfg.get("domains", {}).items():
@@ -182,9 +198,68 @@ class Proxy:
         return types.CallToolResult(content=[types.TextContent(type="text", text=message)])
 
 
+def build_http_app(server: Server, cfg: dict, connect):
+    """Starlette app: bearer auth → auth context → MCP streamable HTTP at /mcp.
+
+    `connect(stack)` is awaited inside the lifespan so upstream sessions live
+    exactly as long as the HTTP server.
+    """
+    from starlette.applications import Starlette
+    from starlette.middleware import Middleware
+    from starlette.middleware.authentication import AuthenticationMiddleware
+    from starlette.routing import Route
+    from mcp.server.auth.middleware.auth_context import AuthContextMiddleware
+    from mcp.server.auth.middleware.bearer_auth import BearerAuthBackend, RequireAuthMiddleware
+    from mcp.server.auth.routes import build_resource_metadata_url, create_protected_resource_routes
+    from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
+    from mcp.server.transport_security import TransportSecuritySettings
+    from pydantic import AnyHttpUrl
+
+    auth_cfg = cfg.get("auth")
+    if not auth_cfg:
+        raise SystemExit("streamable-http requires an `auth:` block — identity must come from a token")
+    verifier = build_verifier(auth_cfg)
+    http_cfg = cfg.get("http", {})
+    manager = StreamableHTTPSessionManager(
+        app=server, json_response=bool(http_cfg.get("json_response", False)),
+        security_settings=TransportSecuritySettings(
+            enable_dns_rebinding_protection=bool(http_cfg.get("dns_rebinding_protection", False)),
+            allowed_hosts=http_cfg.get("allowed_hosts", []), allowed_origins=http_cfg.get("allowed_origins", [])),
+        session_idle_timeout=http_cfg.get("session_idle_timeout", 1800),
+    )
+
+    resource_url = auth_cfg.get("resource_url")
+    routes = []
+    metadata_url = None
+    if resource_url:
+        routes += create_protected_resource_routes(
+            resource_url=AnyHttpUrl(resource_url),
+            authorization_servers=[AnyHttpUrl(auth_cfg["issuer"])] if auth_cfg.get("issuer") else [],
+            scopes_supported=auth_cfg.get("required_scopes"), resource_name="aggrete")
+        metadata_url = build_resource_metadata_url(AnyHttpUrl(resource_url))
+    routes.append(Route("/mcp", endpoint=RequireAuthMiddleware(
+        manager.handle_request, auth_cfg.get("required_scopes") or [], metadata_url),
+        methods=["GET", "POST", "DELETE"]))
+
+    @contextlib.asynccontextmanager
+    async def lifespan(app):
+        async with contextlib.AsyncExitStack() as stack:
+            await connect(stack)
+            async with manager.run():
+                yield
+
+    return Starlette(routes=routes, lifespan=lifespan, middleware=[
+        Middleware(AuthenticationMiddleware, backend=BearerAuthBackend(verifier)),
+        Middleware(AuthContextMiddleware),
+    ])
+
+
 async def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", default="proxy.config.yaml")
+    ap.add_argument("--transport", choices=["stdio", "streamable-http"], default="stdio")
+    ap.add_argument("--host", default="127.0.0.1")
+    ap.add_argument("--port", type=int, default=8080)
     args = ap.parse_args()
 
     cfg = yaml.safe_load(Path(args.config).read_text())
@@ -193,14 +268,22 @@ async def main() -> None:
     audit = Audit(cfg.get("audit_log"))
     proxy = Proxy(cfg, engine, audit)
 
+    server = Server(
+        "aggrete",
+        version="0.1.0",
+        on_list_tools=proxy.list_tools,
+        on_call_tool=proxy.call_tool,
+    )
+
+    if args.transport == "streamable-http":
+        import uvicorn
+        app = build_http_app(server, cfg, proxy.connect)
+        config = uvicorn.Config(app, host=args.host, port=args.port, log_level="info")
+        await uvicorn.Server(config).serve()
+        return
+
     async with contextlib.AsyncExitStack() as stack:
         await proxy.connect(stack)
-        server = Server(
-            "aggrete",
-            version="0.1.0",
-            on_list_tools=proxy.list_tools,
-            on_call_tool=proxy.call_tool,
-        )
         async with stdio_server() as (read, write):
             await server.run(read, write, server.create_initialization_options())
 

@@ -2,3 +2,6 @@ mcp>=2.0
 pyyaml
 pytest
 anthropic>=1.0
+pyjwt[crypto]>=2.8
+uvicorn>=0.30
+starlette>=0.40

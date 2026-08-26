@@ -40,7 +40,8 @@ remediation path rather than an error.
 | `aggrete/policy.py` | deterministic evaluation; no model in this path |
 | `aggrete/accumulator.py` | per-user state, TTL'd; `MemoryStore` / `RedisStore` |
 | `aggrete/entities.py` | person-ID extraction from tool results |
-| `aggrete/proxy.py` | MCP server + upstream clients, pre/post enforcement |
+| `aggrete/proxy.py` | MCP server (stdio or streamable HTTP) + upstream clients, pre/post enforcement |
+| `aggrete/auth.py` | bearer-token verification (JWT via JWKS/PEM, or static dev tokens) → user identity |
 | `proxy.config.yaml` | tool-pattern → domain mapping, upstream wiring (`command:` stdio or `url:` streamable HTTP; header values may use `${ENV_VAR}`) |
 | `demo/mock_server.py` | fake HR / finance / ops connectors (`--transport streamable-http` for HTTP) |
 | `aggrete/ingest.py` | document (PDF/DOCX/MD) → draft `coc.yaml` via Claude; verifies drafts through `Engine` |
@@ -59,9 +60,9 @@ remediation path rather than an error.
 
 1. `entities.py` — tune `EMAIL_KEYS`/`ID_KEYS` against real connector payloads. Identifiers on one JSON object collapse to one person (email preferred as the canonical key so it matches across connectors); records that carry only a source-system ID will not link to email-only records from another connector without an external identity map.
    Every threshold in `coc.yaml` is only as good as this function.
-2. stdio identity is advisory. Upstreams can be remote (`url:`), but the proxy
-   itself still listens on stdio; serve it over streamable HTTP + OAuth and
-   take the subject from the token before multi-user use.
+2. Identity: solved for HTTP (`--transport streamable-http` requires `auth:`;
+   user derived from the token, see `aggrete/auth.py`). stdio identity remains
+   advisory by design — use it only on a single laptop.
 3. No multi-tenancy, token vault, or HA. For production, port `policy.py` onto
    agentgateway or IBM ContextForge as a plugin rather than running this as the
    control plane.

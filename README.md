@@ -98,6 +98,29 @@ upstreams:
 `tests/test_http_upstream.py` runs the mock `ops` connector over HTTP
 (`demo/mock_server.py --transport streamable-http`) behind the proxy end to end.
 
+## Serving it to a whole company: streamable HTTP + OAuth
+
+stdio is for one laptop. For everyone else, run Aggrete as a service and let
+identity come from the token:
+
+```bash
+python -m aggrete.proxy --config proxy.config.yaml --transport streamable-http --host 0.0.0.0 --port 8080
+```
+
+HTTP mode refuses to start without an `auth:` block. In `jwt` mode it validates
+bearer JWTs from your IdP (issuer, audience, expiry, signature via JWKS,
+required scopes) and derives the user from the `email` claim — configurable
+with `identity_claim`. Every request without a valid token is a 401 with an
+RFC 9728 `WWW-Authenticate` pointer, and the `user:` line in the config is
+ignored entirely. `static` mode (fixed tokens) exists for development and the
+test-suite. The accumulator keys state on the token identity, so the same
+person hitting Aggrete from Claude Code, Claude.ai and Cursor shares one
+history — which is the point.
+
+Register it in a client as a remote MCP server at `https://<host>/mcp` with
+the bearer token your IdP issues; keep the connectors themselves reachable
+only from the Aggrete host.
+
 ## Starting from the document you already have
 
 `aggrete/ingest.py` turns a code-of-conduct document into a draft `coc.yaml`:
