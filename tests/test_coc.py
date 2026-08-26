@@ -25,7 +25,7 @@ def run_sequence(steps) -> str:
         pre = engine.pre_call(user, step["domain"])
         if not pre.allow:
             return "deny"
-        post = engine.post_call(user, step["domain"], step.get("entities", []))
+        post = engine.post_call(user, step["domain"], [f"p:{user}" if x == "p:self" else x for x in step.get("entities", [])])
         if not post.allow:
             return "deny"
         if post.alerts:

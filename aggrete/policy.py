@@ -115,6 +115,21 @@ class Engine:
                         return self._deny(rule, hit)
                     alerts.append(hit)
 
+            for e in rule.blocks("self_comparison"):
+                # The requester's own record next to colleagues' records in the
+                # same domain: the precondition for any "how do I compare" answer.
+                if e["domain"] != domain:
+                    continue
+                seen = self.store.entities(user, domain)
+                me = f"p:{user.strip().lower()}"
+                others = sorted(x for x in seen if x != me)
+                if me in seen and others:
+                    hit = {"rule_id": rule.id, "domain": domain, "self": me,
+                           "others": others[:10], "distinct_others": len(others)}
+                    if e.get("action", "alert") == "deny" and not self.store.granted(user, rule.id):
+                        return self._deny(rule, hit)
+                    alerts.append(hit)
+
             for e in rule.blocks("domain_join"):
                 if domain not in e["domains"]:
                     continue
