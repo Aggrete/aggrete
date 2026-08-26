@@ -41,6 +41,8 @@ remediation path rather than an error.
 | `aggrete/accumulator.py` | per-user state, TTL'd; `MemoryStore` / `RedisStore` |
 | `aggrete/entities.py` | person-ID extraction from tool results |
 | `aggrete/proxy.py` | MCP server (stdio or streamable HTTP) + upstream clients, pre/post enforcement |
+| `aggrete/plugin.py` | `PolicyHook` (before/after) + `AggreteMiddleware` (ASGI) for embedding in other gateways |
+| `deploy/helm/aggrete` | Helm chart: Deployment, ConfigMap (policy), Redis, Ingress |
 | `aggrete/auth.py` | bearer-token verification (JWT via JWKS/PEM, or static dev tokens) → user identity |
 | `proxy.config.yaml` | tool-pattern → domain mapping, upstream wiring (`command:` stdio or `url:` streamable HTTP; header values may use `${ENV_VAR}`) |
 | `demo/mock_server.py` | fake HR / finance / ops connectors (`--transport streamable-http` for HTTP) |
@@ -63,6 +65,6 @@ remediation path rather than an error.
 2. Identity: solved for HTTP (`--transport streamable-http` requires `auth:`;
    user derived from the token, see `aggrete/auth.py`). stdio identity remains
    advisory by design — use it only on a single laptop.
-3. No multi-tenancy, token vault, or HA. For production, port `policy.py` onto
-   agentgateway or IBM ContextForge as a plugin rather than running this as the
-   control plane.
+3. Multi-replica via `store: {redis_url}` + Helm; no multi-tenancy or token
+   vault. To embed in agentgateway / ContextForge use `aggrete/plugin.py`
+   (their native plugin manifests still need writing against their current APIs).

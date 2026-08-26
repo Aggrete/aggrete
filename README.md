@@ -121,6 +121,36 @@ Register it in a client as a remote MCP server at `https://<host>/mcp` with
 the bearer token your IdP issues; keep the connectors themselves reachable
 only from the Aggrete host.
 
+## Inside a gateway you already run
+
+If agentgateway, IBM ContextForge, Kong or your own gateway is already the
+control plane, don't add a second one — embed Aggrete:
+
+```python
+from aggrete.plugin import PolicyHook, AggreteMiddleware
+
+hook = PolicyHook("coc.yaml", domains={"hr__*": "hr-personnel", "ops__*": "ops-rota"},
+                  store=RedisStore(redis_client))
+# as two calls from your plugin system
+v = hook.before(user, tool)             # v.allow, v.message (clause + remediation)
+v = hook.after(user, tool, result_text) # records entities, re-evaluates
+# or as ASGI middleware around any MCP server that answers in JSON
+app = AggreteMiddleware(app, hook, identity=lambda scope: scope["state"]["user"])
+```
+
+Identity is a callable over the request, so it composes with whatever auth
+the host performs. The middleware refuses at pre-call without forwarding and
+inspects JSON tools/call results for post-call recording.
+
+## Ways to deploy
+
+| Who | How |
+|---|---|
+| One developer | `uvx aggrete --config proxy.config.yaml` (PyPI) or the `.mcp.json` in this repo |
+| A team | `docker run ghcr.io/cjohannsen81/aggrete` with `/etc/aggrete` mounted, or `helm install aggrete deploy/helm/aggrete` (bundled Redis, JWT auth, Ingress) |
+| A company | Helm/Docker behind your IdP, then make `https://aggrete.<corp>/mcp` the *only* MCP server your assistant policies allow (Claude Code managed settings, Claude Enterprise connectors, Copilot/Cursor org policies), with connectors network-restricted to the Aggrete hosts |
+| Existing gateway | `aggrete.plugin` (above) |
+
 ## Starting from the document you already have
 
 `aggrete/ingest.py` turns a code-of-conduct document into a draft `coc.yaml`:
