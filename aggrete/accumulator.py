@@ -1,6 +1,6 @@
 """Layer 4 state: what each user has already pulled, across every connector.
 
-Keyed to the *user*, not the session — a new chat must not reset the budget.
+Keyed to the *user*, not the session. A new chat must not reset the budget.
 MemoryStore is for tests and single-process runs; RedisStore is what you
 deploy, because the whole point is state shared across clients and gateways.
 """

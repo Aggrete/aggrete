@@ -6,7 +6,7 @@ The model reads the document and proposes rules in the exact shape coc.yaml
 uses. The result is a DRAFT: every rule comes back as `action: alert`, every
 rule must pass its own embedded tests through the real Engine before the file
 is written, and the clause owner still has to review it. What the model does
-here is the part that needs judgment — recognising that "may not be combined
+here is the part that needs judgment. Recognising that "may not be combined
 to derive" is a domain_join over three domains. Enforcement stays deterministic.
 """
 
@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import base64
 import json
+import os
 import re
 import sys
 import tempfile
@@ -23,7 +24,7 @@ from pathlib import Path
 
 import yaml
 
-MODEL = "claude-opus-5"
+MODEL = os.environ.get("AGGRETE_INGEST_MODEL", "claude-opus-5")  # any model the Anthropic SDK can call
 
 RULE_TYPES = """
 Rule types the engine implements (nothing else is enforceable):
@@ -38,7 +39,7 @@ Rule types the engine implements (nothing else is enforceable):
   from one `domain` have both been seen within `window`. Use for "may not be
   used to compare or benchmark individuals" (timesheets, performance, pay).
   In tests, `p:self` stands for the requesting user.
-Clauses that need none of these — tone, harassment, expense etiquette — are
+Clauses that need none of these. Tone, harassment, expense etiquette. Are
 not enforceable at a data proxy: return them in `unenforceable` with a reason.
 """
 
@@ -161,7 +162,7 @@ def draft(path: Path, domains: list[str]) -> dict:
         "result mentions, per user, over a time window. It cannot read intent.\n"
         + RULE_TYPES +
         "\nDomains already wired into the proxy: "
-        + (", ".join(domains) if domains else "none yet — invent short kebab-case names")
+        + (", ".join(domains) if domains else "none yet. Invent short kebab-case names")
         + ". Prefer existing names; introduce new ones only when a clause needs them.\n"
         "Keep clause text verbatim from the document. Give every rule at least one test "
         "that expects the enforced action and one that expects allow; entity IDs in tests "
@@ -239,7 +240,7 @@ def main() -> None:
     header = (f"# Drafted by aggrete.ingest from {args.document.name}. Every action is "
               "`alert`.\n# Review with the clause owner, then flip to `deny` per rule.\n\n")
     args.output.write_text(header + yaml.safe_dump(coc, sort_keys=False, width=88))
-    print(f"wrote {args.output} — {len(result['rules'])} rules")
+    print(f"wrote {args.output}. {len(result['rules'])} rules")
     for u in result["unenforceable"]:
         print(f"  not enforceable here: {u['clause'][:70]}… ({u['reason']})")
 

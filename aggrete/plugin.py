@@ -2,11 +2,11 @@
 
 Two shapes, both transport-agnostic:
 
-PolicyHook — the engine + accumulator behind two calls. Any gateway plugin
+PolicyHook. The engine + accumulator behind two calls. Any gateway plugin
     system (IBM ContextForge, agentgateway, Kong, your own) can call
     `before()` ahead of forwarding a tools/call and `after()` with the result.
 
-AggreteMiddleware — an ASGI middleware that does the same for any MCP server
+AggreteMiddleware. An ASGI middleware that does the same for any MCP server
     speaking streamable HTTP with JSON responses: it reads tools/call requests,
     refuses at pre-call without forwarding, and records entities from the
     response. Identity is a callable over the ASGI scope, so it composes with
