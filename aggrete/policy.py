@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import datetime
+import time
+
 from dataclasses import dataclass, field
 from itertools import combinations
 
@@ -50,6 +53,40 @@ class Rule:
         return [e for e in self.enforce if e.get("type") == kind]
 
 
+def _ts(value) -> float | None:
+    """ISO date or datetime to epoch seconds; None if unset."""
+    if not value:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, datetime.datetime):
+        return value.timestamp()
+    if isinstance(value, datetime.date):
+        return datetime.datetime.combine(value, datetime.time()).timestamp()
+    return datetime.datetime.fromisoformat(str(value)).timestamp()
+
+
+def in_scope(e: dict, user: str, now: float | None = None) -> bool:
+    """Does this enforcement block apply to this user right now?
+
+    `allowed_users` exempts people (counsel, the consultation team);
+    `blocked_users` targets people (the subject of an investigation);
+    `since` / `until` bound the rule in time (embargoes, quiet periods).
+    """
+    now = time.time() if now is None else now
+    u = user.strip().lower()
+    if e.get("allowed_users") and u in {x.strip().lower() for x in e["allowed_users"]}:
+        return False
+    if e.get("blocked_users") and u not in {x.strip().lower() for x in e["blocked_users"]}:
+        return False
+    since, until = _ts(e.get("since")), _ts(e.get("until"))
+    if since and now < since:
+        return False
+    if until and now >= until:
+        return False
+    return True
+
+
 class Engine:
     """Evaluates Layer 3 (this call) and Layer 4 (everything so far)."""
 
@@ -69,11 +106,22 @@ class Engine:
         """
         for rule in self.rules:
             for e in rule.blocks("domain_block"):
-                if domain in e["domains"] and e.get("action", "deny") == "deny":
+                if domain in e["domains"] and e.get("action", "deny") == "deny" and in_scope(e, user):
                     return self._deny(rule, {"domain": domain})
 
+            for e in rule.blocks("wall"):
+                # Embargoes, investigation walls, privilege: who may reach a domain, and until when.
+                if domain not in e["domains"] or not in_scope(e, user):
+                    continue
+                if e.get("action", "deny") != "deny":
+                    continue
+                if purpose := self.store.granted(user, rule.id):
+                    return Decision(allow=True, rule_id=rule.id, granted_purpose=purpose)
+                return self._deny(rule, {"domain": domain, "until": e.get("until"),
+                                         "allowed_users": e.get("allowed_users"), "blocked_users": e.get("blocked_users")})
+
             for e in rule.blocks("domain_join"):
-                if domain not in e["domains"]:
+                if domain not in e["domains"] or not in_scope(e, user):
                     continue
                 already = [d for d in e["domains"] if d != domain and d in self.store.domains(user)]
                 if len(already) != len(e["domains"]) - 1:
@@ -104,6 +152,17 @@ class Engine:
 
         alerts: list[dict] = []
         for rule in self.rules:
+            for e in rule.blocks("min_group"):
+                # Aggregate-only answers: a result about fewer than k people is one person's data.
+                if e["domain"] != domain or not in_scope(e, user):
+                    continue
+                n = len(set(entities))
+                if 0 < n < int(e.get("k", 10)):
+                    hit = {"rule_id": rule.id, "domain": domain, "people": n, "k": int(e.get("k", 10))}
+                    if e.get("action", "alert") == "deny" and not self.store.granted(user, rule.id):
+                        return self._deny(rule, hit)
+                    alerts.append(hit)
+
             for e in rule.blocks("entity_budget"):
                 if e["domain"] != domain:
                     continue
@@ -131,7 +190,7 @@ class Engine:
                     alerts.append(hit)
 
             for e in rule.blocks("domain_join"):
-                if domain not in e["domains"]:
+                if domain not in e["domains"] or not in_scope(e, user):
                     continue
                 if not set(e["domains"]) <= self.store.domains(user):
                     continue

@@ -39,6 +39,12 @@ Rule types the engine implements (nothing else is enforceable):
   from one `domain` have both been seen within `window`. Use for "may not be
   used to compare or benchmark individuals" (timesheets, performance, pay).
   In tests, `p:self` stands for the requesting user.
+- min_group: alert/deny when a result from `domain` covers fewer than `k`
+  people. Use for "only averages / aggregates may be shared" (pay transparency).
+- wall: deny access to `domains` for everyone except `allowed_users`, or only
+  for `blocked_users`, optionally `until` a date. Use for privilege, embargoes,
+  investigation subjects, quiet periods. A test may set `user:` to the identity.
+- domain_join/domain_block also accept allowed_users, blocked_users, since, until.
 Clauses that need none of these. Tone, harassment, expense etiquette. Are
 not enforceable at a data proxy: return them in `unenforceable` with a reason.
 """
@@ -63,13 +69,18 @@ SCHEMA = {
                             "properties": {
                                 "layer": {"type": "string", "enum": ["retrieval", "accumulation"]},
                                 "action": {"type": "string", "enum": ["alert", "deny"]},
-                                "type": {"type": "string", "enum": ["domain_join", "entity_budget", "domain_block", "self_comparison"]},
+                                "type": {"type": "string", "enum": ["domain_join", "entity_budget", "domain_block", "self_comparison", "min_group", "wall"]},
                                 "domains": {"type": "array", "items": {"type": "string"}},
                                 "domain": {"type": "string"},
                                 "require_entity_overlap": {"type": "boolean"},
                                 "max_distinct": {"type": "integer"},
                                 "scope": {"type": "string", "enum": ["user"]},
                                 "window": {"type": "string"},
+                                "k": {"type": "integer"},
+                                "allowed_users": {"type": "array", "items": {"type": "string"}},
+                                "blocked_users": {"type": "array", "items": {"type": "string"}},
+                                "until": {"type": "string"},
+                                "since": {"type": "string"},
                             },
                             "required": ["layer", "action", "type", "scope", "window"],
                             "additionalProperties": False,
@@ -202,7 +213,7 @@ def verify(coc: dict) -> list[str]:
         if "allow" not in expects or not (expects & {"alert", "deny"}):
             failures.append(f"{rule.id}: needs both an allow test and an alert/deny test")
         for t in rule.tests:
-            engine, user, outcome = Engine(tmp, MemoryStore()), "t@example.com", "allow"
+            engine, user, outcome = Engine(tmp, MemoryStore()), t.get("user", "t@example.com"), "allow"
             for step in t["sequence"]:
                 if not engine.pre_call(user, step["domain"]).allow:
                     outcome = "deny"; break

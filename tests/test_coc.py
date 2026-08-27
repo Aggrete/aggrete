@@ -17,9 +17,8 @@ from aggrete.policy import Engine  # noqa: E402
 COC = str(pathlib.Path(__file__).resolve().parents[1] / "coc.yaml")
 
 
-def run_sequence(steps) -> str:
+def run_sequence(steps, user: str = "test@example.com") -> str:
     engine = Engine(COC, MemoryStore())
-    user = "test@example.com"
     outcome = "allow"
     for step in steps:
         pre = engine.pre_call(user, step["domain"])
@@ -41,7 +40,7 @@ def cases():
 
 @pytest.mark.parametrize("rule_id,case", list(cases()))
 def test_clause(rule_id, case):
-    assert run_sequence(case["sequence"]) == case["expect"]
+    assert run_sequence(case["sequence"], case.get("user", "test@example.com")) == case["expect"]
 
 
 def test_every_rule_has_positive_and_negative_coverage():
