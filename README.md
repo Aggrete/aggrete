@@ -107,6 +107,47 @@ upstreams:
 `tests/test_http_upstream.py` runs the mock `ops` connector over HTTP
 (`demo/mock_server.py --transport streamable-http`) behind the proxy end to end.
 
+
+## Architecture: where the proxy lives and how the pieces connect
+
+```
+  people's assistants                 your network                          your systems
+  (Claude, Copilot, Cursor)   |                                     |
+                              |   mcp.example.com  (this proxy)     |   HR system (Workday)
+   ── HTTPS + OAuth ────────► |   Starlette, streamable HTTP        | ─► Finance (budget lines)
+                              |   identity from the token           | ─► On-call rotations
+                              |   policy: coc.yaml                  | ─► Drive, Slack, CRM ...
+                              |   state: Redis (or memory)          |   (reachable only from the proxy)
+                              |         │ writes                    |
+                              |         ▼                           |
+                              |   audit.jsonl  ◄── read only ──  Aggrete Console (live.example.com)
+                              |   coc.yaml                          HR / Legal / IT, behind SSO or basic auth
+```
+
+Three rules make this safe:
+
+1. **Only the proxy holds connector credentials.** People sign in to the proxy
+   (your IdP via `mode: jwt`, or the built-in sign-in via `mode: builtin` when
+   you have no IdP yet); the proxy signs in to the connectors. Fence the
+   connectors so they accept traffic only from the proxy host.
+2. **The console never touches the connectors.** It reads two files the proxy
+   writes, `audit.jsonl` and `coc.yaml`, on the same host or a shared volume,
+   and it changes nothing the proxy enforces. Put it behind your SSO or, at
+   minimum, HTTP basic auth; it shows who asked what.
+3. **The assistants may only talk to the proxy.** Managed client policy
+   (Claude Code managed settings, Claude Enterprise connectors, Copilot and
+   Cursor org policies) allow-lists `https://mcp.example.com/mcp` and nothing
+   else.
+
+Connecting Claude (claude.ai): Settings → Connectors → Add custom connector →
+URL `https://mcp.example.com/mcp`. Claude discovers the sign-in from the
+proxy's OAuth metadata, registers itself, and sends you to `/signin`. From then
+on every question Claude asks on your behalf passes the policy.
+
+Sample handbook: `samples/northwind-handbook.docx`; `coc.yaml` maps to its
+clauses 7.1 to 7.11 one to one (7.4 and 7.12 are not enforceable at a data
+proxy). `aggrete-ingest samples/northwind-handbook.docx` reproduces it.
+
 ## Serving it to a whole company: streamable HTTP + OAuth
 
 stdio is for one laptop. For everyone else, run Aggrete as a service and let
@@ -121,7 +162,9 @@ bearer JWTs from your IdP (issuer, audience, expiry, signature via JWKS,
 required scopes) and derives the user from the `email` claim. Configurable
 with `identity_claim`. Every request without a valid token is a 401 with an
 RFC 9728 `WWW-Authenticate` pointer, and the `user:` line in the config is
-ignored entirely. `static` mode (fixed tokens) exists for development and the
+ignored entirely. `builtin` mode is a small OAuth server inside the proxy (dynamic client
+registration, a sign-in page, passcodes from the environment) for teams with
+no IdP yet. `static` mode (fixed tokens) exists for development and the
 test-suite. The accumulator keys state on the token identity, so the same
 person hitting Aggrete from Claude Code, Claude.ai and Cursor shares one
 history. Which is the point.

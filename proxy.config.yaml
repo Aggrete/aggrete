@@ -14,6 +14,13 @@ user: christian@example.com        # stdio only. Ignored over HTTP: identity com
 #   required_scopes: [mcp]
 #   identity_claim: email          # default order: email, preferred_username, sub
 #   resource_url: https://aggrete.internal.example.com/mcp      # publishes RFC 9728 metadata
+# No identity provider yet: built-in sign-in (OAuth server inside the proxy; Claude and Cursor
+# register themselves and send people to /signin). Passcodes from the environment.
+# auth:
+#   mode: builtin
+#   issuer: https://mcp.example.com
+#   users: {alice@example.com: "${ALICE_PASSCODE}"}
+#   state: /var/lib/aggrete/signin.json
 # Development: fixed tokens.
 # auth:
 #   mode: static

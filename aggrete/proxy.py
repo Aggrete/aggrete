@@ -234,7 +234,15 @@ def build_http_app(server: Server, cfg: dict, connect):
     auth_cfg = cfg.get("auth")
     if not auth_cfg:
         raise SystemExit("streamable-http requires an `auth:` block. Identity must come from a token")
-    verifier = build_verifier(auth_cfg)
+    signin = None
+    if auth_cfg.get("mode") == "builtin":
+        from mcp.server.auth.provider import ProviderTokenVerifier
+        from .signin import BuiltinAuthServer
+        users = {k: expand_env(str(v)) for k, v in (auth_cfg.get("users") or {}).items()}
+        signin = BuiltinAuthServer(users, auth_cfg["issuer"], auth_cfg.get("state"))
+        verifier = ProviderTokenVerifier(signin)
+    else:
+        verifier = build_verifier(auth_cfg)
     http_cfg = cfg.get("http", {})
     manager = StreamableHTTPSessionManager(
         app=server, json_response=bool(http_cfg.get("json_response", False)),
@@ -244,9 +252,16 @@ def build_http_app(server: Server, cfg: dict, connect):
         session_idle_timeout=http_cfg.get("session_idle_timeout", 1800),
     )
 
-    resource_url = auth_cfg.get("resource_url")
+    resource_url = auth_cfg.get("resource_url") or (auth_cfg["issuer"].rstrip("/") + "/mcp" if signin else None)
     routes = []
     metadata_url = None
+    if signin:
+        from mcp.server.auth.routes import create_auth_routes
+        from mcp.server.auth.settings import ClientRegistrationOptions, RevocationOptions
+        routes += create_auth_routes(provider=signin, issuer_url=AnyHttpUrl(auth_cfg["issuer"]),
+                                     client_registration_options=ClientRegistrationOptions(enabled=True, valid_scopes=["mcp"], default_scopes=["mcp"]),
+                                     revocation_options=RevocationOptions(enabled=True))
+        routes.append(Route("/signin", signin.signin, methods=["GET", "POST"]))
     if resource_url:
         routes += create_protected_resource_routes(
             resource_url=AnyHttpUrl(resource_url),
