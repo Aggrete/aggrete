@@ -330,3 +330,32 @@ rules:
           - {domain: site-finance, entities: []}
           - {domain: headcount, entities: []}
 
+  # ---- A colleague's absence is health data ----
+  - rule_id: COC-HR-033
+    title: A colleague's absence and health records
+    clause: >
+      Absence, leave and sickness records of an identifiable individual are
+      health information and may be retrieved only by HR. Coverage is planned
+      from team rotas, not from a named person's absence record.
+    owner: hr-privacy@example.com
+    severity: high
+    remediation: >
+      To plan coverage, use the team rota. Absence for a named person is
+      available to HR; if you manage the person and need it, ask HR.
+    enforce:
+      - layer: retrieval
+        action: deny
+        type: wall
+        domains: [health-absence]
+        allowed_users: [hr-privacy@example.com]
+    tests:
+      - name: hr_may_read_absence
+        expect: allow
+        user: hr-privacy@example.com
+        sequence:
+          - {domain: health-absence, entities: []}
+      - name: a_colleague_may_not
+        expect: deny
+        sequence:
+          - {domain: health-absence, entities: []}
+
