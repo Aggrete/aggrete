@@ -12,6 +12,7 @@ defaults:
 
 rules:
   - rule_id: COC-HR-004
+    title: Combining personnel, budget and rotation records
     clause: >
       Personnel records, compensation or budget records, and operational
       rosters may not be combined to derive the employment status,
@@ -51,6 +52,7 @@ rules:
           - {domain: ops-rota, entities: [p:frank]}
 
   - rule_id: COC-HR-011
+    title: Bulk lists of people
     clause: >
       Assistants may not be used to assemble rosters or lists of individuals
       from personnel systems beyond what a single task requires.
@@ -78,6 +80,7 @@ rules:
           - {domain: hr-personnel, entities: [p:a, p:b, p:c, p:d, p:e, p:f, p:g, p:h, p:i]}
 
   - rule_id: COC-LEGAL-001
+    title: Legal hold material
     clause: >
       Content under legal hold is not available to assistants under any
       circumstances, including to users who can otherwise open it.
@@ -100,6 +103,7 @@ rules:
           - {domain: ops-rota, entities: [p:alice]}
 
   - rule_id: COC-HR-021
+    title: Comparing colleagues' timesheets
     clause: >
       Records of colleagues' working time, attendance or output may not be
       used to benchmark or compare individuals against one another, including
@@ -140,6 +144,7 @@ rules:
 
   # ---- Aggregate-only answers (EU Pay Transparency) ----
   - rule_id: COC-HR-031
+    title: Pay figures for small groups
     clause: >
       Pay information may be shared with employees only as averages for
       categories of workers; figures that describe fewer than ten people are
@@ -169,6 +174,7 @@ rules:
 
   # ---- Protected-attribute firewall for AI-written reviews ----
   - rule_id: COC-HR-032
+    title: Health and absence in performance reviews
     clause: >
       Performance assessments may not draw on health, absence, leave or
       accommodation records of the person being assessed.
@@ -198,6 +204,7 @@ rules:
 
   # ---- Privilege containment ----
   - rule_id: COC-LEGAL-002
+    title: Privileged legal material
     clause: >
       Privileged legal material is available only to the counsel of record
       for the matter and may not be summarised or reproduced into other
@@ -237,6 +244,7 @@ rules:
 
   # ---- Embargo window ----
   - rule_id: COC-MGMT-001
+    title: Restructuring plans before the announcement
     clause: >
       Restructuring plans are confidential until announced and may not be
       retrieved, inferred or discussed by anyone outside the planning team
@@ -264,6 +272,7 @@ rules:
 
   # ---- Investigation wall ----
   - rule_id: COC-LEGAL-003
+    title: The subject of an investigation and the case file
     clause: >
       The subject of an internal investigation may not access the case file
       while the investigation is open.
@@ -290,6 +299,7 @@ rules:
 
   # ---- Consultation quiet period ----
   - rule_id: COC-MGMT-002
+    title: Site finances and headcount during a consultation
     clause: >
       While a works-council consultation is open, site-level financial data
       may not be combined with headcount data by anyone outside the
