@@ -26,6 +26,7 @@ user: christian@example.com        # stdio only. Ignored over HTTP: identity com
 #   allowed_hosts: [aggrete.internal.example.com]
 #   session_idle_timeout: 1800
 audit_log: audit.jsonl
+audit_entities: true    # record which people appeared in each result (needed for policy replay and inference distance)
 
 upstreams:
   hr:
