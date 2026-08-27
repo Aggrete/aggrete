@@ -33,6 +33,14 @@ user: christian@example.com        # stdio only. Ignored over HTTP: identity com
 #   allowed_hosts: [aggrete.internal.example.com]
 #   session_idle_timeout: 1800
 audit_log: audit.jsonl
+
+# What assistants show for this connector (name and logo in the connect dialog).
+brand:
+  title: Aggrete
+  website_url: https://aggrete.com
+  icon_url: https://mcp.aggrete.com/icon.svg   # advertised in the MCP handshake
+  icon_file: brand-icon.svg                      # served at /icon.svg and /favicon.ico
+  icon_mime: image/svg+xml
 audit_entities: true    # record which people appeared in each result (needed for policy replay and inference distance)
 
 upstreams:
