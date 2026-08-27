@@ -1,5 +1,7 @@
 # Aggrete
 
+The open-source proxy. Product site: https://aggrete.com. This repo is the proxy and nothing else: engine, accumulator, ingest CLI, Helm chart.
+
 An MCP proxy that enforces a **code of conduct document** across connectors, with
 state that accumulates per user.
 
