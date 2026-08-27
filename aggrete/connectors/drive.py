@@ -121,28 +121,32 @@ def build(drive: Drive, root_name: str) -> MCPServer:
                                         "Share it (Viewer) and restart the proxy."})
         return server
     folders = drive.subfolders(root["id"]) or [root]
+
+    @server.tool(name="folders", description="List the Google Drive folders you can search here. Call this first when asked about documents, files or anything in Google Drive.")
+    def folders_tool() -> str:
+        return json.dumps({"drive_folders": [{"name": f["name"], "search_tool": f"search_{slug(f['name'])}", "read_tool": f"read_{slug(f['name'])}"} for f in folders]})
+
     for f in folders:
         s = slug(f["name"]); fid = f["id"]; label = f["name"]
 
         def make(fid=fid, label=label):
             def search(query: str = "") -> str:
-                """Search files in the '%s' folder by words in the title or text."""
                 return json.dumps({"folder": label, "files": [
                     {"id": x["id"], "name": x["name"], "type": x.get("mimeType"), "modified": x.get("modifiedTime"),
                      "owner_email": (x.get("owners") or [{}])[0].get("emailAddress"),
                      "editor_email": (x.get("lastModifyingUser") or {}).get("emailAddress"), "link": x.get("webViewLink")}
                     for x in drive.search(fid, query)]})
             def read(file_id: str) -> str:
-                """Read a file from the '%s' folder (Docs, Sheets and Slides are exported as text)."""
                 meta, text = drive.read(file_id, fid)
                 return json.dumps({"folder": label, "name": meta["name"], "owner_email": (meta.get("owners") or [{}])[0].get("emailAddress"),
                                    "editor_email": (meta.get("lastModifyingUser") or {}).get("emailAddress"), "text": text})
-            search.__doc__ = search.__doc__ % label; read.__doc__ = read.__doc__ % label
             return search, read
 
         search, read = make()
-        server.tool(name=f"search_{s}", description=search.__doc__)(search)
-        server.tool(name=f"read_{s}", description=read.__doc__)(read)
+        sdesc = f"Search Google Drive for documents in the '{label}' folder, by words in the title or full text. Use this to look for {label.lower()} in Drive; leave the query empty to list everything in the folder."
+        rdesc = f"Read a Google Drive document from the '{label}' folder (Docs, Sheets and Slides come back as text)."
+        server.tool(name=f"search_{s}", description=sdesc)(search)
+        server.tool(name=f"read_{s}", description=rdesc)(read)
     return server
 
 
