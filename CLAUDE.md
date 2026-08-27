@@ -43,6 +43,8 @@ remediation path rather than an error.
 | `aggrete/proxy.py` | MCP server (stdio or streamable HTTP) + upstream clients, pre/post enforcement |
 | `aggrete/plugin.py` | `PolicyHook` (before/after) + `AggreteMiddleware` (ASGI) for embedding in other gateways |
 | `deploy/helm/aggrete` | Helm chart: Deployment, ConfigMap (policy), Redis, Ingress. The website and its hosting live in the private `aggrete-site` repo, not here. |
+| `aggrete/signin.py` | built-in OAuth authorization server (`auth.mode: builtin`): DCR, /signin page, opaque tokens, state file |
+| `samples/` | Northwind sample handbook (.docx) that `coc.yaml` maps to |
 | `aggrete/auth.py` | bearer-token verification (JWT via JWKS/PEM, or static dev tokens) → user identity |
 | `proxy.config.yaml` | tool-pattern → domain mapping, upstream wiring (`command:` stdio or `url:` streamable HTTP; header values may use `${ENV_VAR}`) |
 | `demo/mock_server.py` | fake HR / finance / ops connectors (`--transport streamable-http` for HTTP) |
