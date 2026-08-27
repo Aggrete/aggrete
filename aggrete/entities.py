@@ -18,7 +18,7 @@ from __future__ import annotations
 import json
 import re
 
-EMAIL_KEYS = ("email", "user_email", "primary_email", "mail", "owner_email")
+EMAIL_KEYS = ("email", "user_email", "primary_email", "mail", "owner_email", "editor_email", "emailaddress")
 ID_KEYS = ("employee_id", "person_id", "worker_id", "user_id", "assignee_id",
            "owner_id", "sfid", "slack_user_id")
 IDENTIFIER_KEYS = set(EMAIL_KEYS) | set(ID_KEYS)
