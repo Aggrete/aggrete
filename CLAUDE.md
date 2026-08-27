@@ -55,7 +55,8 @@ remediation path rather than an error.
   enforces that.
 - New rule types are implemented in `Engine.pre_call` / `Engine.post_call` and
   dispatched by the `type:` key. Prefer pre-call decidability where possible.
-  `self_comparison` is post-call only. In coc.yaml tests `p:self` = the requester.
+  `self_comparison` and `min_group` are post-call only; `wall` is pre-call.
+  In coc.yaml tests `p:self` = the requester and a test may set `user:`.
 - Actions start at `alert` and move to `deny` only after tuning on real traffic.
 - Audit rows go to stderr and `audit.jsonl`. Keep them one JSON object per line.
 

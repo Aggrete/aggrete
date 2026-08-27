@@ -137,3 +137,186 @@ rules:
         sequence:
           - {domain: timesheets, entities: [p:self]}
           - {domain: timesheets, entities: [p:alice]}
+
+  # ---- Aggregate-only answers (EU Pay Transparency) ----
+  - rule_id: COC-HR-031
+    clause: >
+      Pay information may be shared with employees only as averages for
+      categories of workers; figures that describe fewer than ten people are
+      individual pay and may not be disclosed.
+    owner: hr-privacy@example.com
+    severity: high
+    remediation: >
+      Ask for a larger category (a whole job family or location). Individual
+      pay questions go to your HR business partner.
+    enforce:
+      - layer: accumulation
+        action: deny
+        type: min_group
+        domain: pay-aggregates
+        k: 10
+        scope: user
+        window: 24h
+    tests:
+      - name: large_category_is_fine
+        expect: allow
+        sequence:
+          - {domain: pay-aggregates, entities: [p:a, p:b, p:c, p:d, p:e, p:f, p:g, p:h, p:i, p:j, p:k]}
+      - name: three_people_is_someone_s_salary
+        expect: deny
+        sequence:
+          - {domain: pay-aggregates, entities: [p:a, p:b, p:c]}
+
+  # ---- Protected-attribute firewall for AI-written reviews ----
+  - rule_id: COC-HR-032
+    clause: >
+      Performance assessments may not draw on health, absence, leave or
+      accommodation records of the person being assessed.
+    owner: hr-privacy@example.com
+    severity: high
+    remediation: >
+      Write the review from performance and project records. If absence is
+      genuinely relevant, HR adds it after review, not the assistant.
+    enforce:
+      - layer: accumulation
+        action: deny
+        type: domain_join
+        domains: [performance-reviews, health-absence]
+        require_entity_overlap: true
+        scope: user
+        window: 4h
+    tests:
+      - name: review_from_performance_only
+        expect: allow
+        sequence:
+          - {domain: performance-reviews, entities: [p:dana]}
+      - name: absence_pulled_into_the_same_review
+        expect: deny
+        sequence:
+          - {domain: performance-reviews, entities: [p:dana]}
+          - {domain: health-absence, entities: [p:dana]}
+
+  # ---- Privilege containment ----
+  - rule_id: COC-LEGAL-002
+    clause: >
+      Privileged legal material is available only to the counsel of record
+      for the matter and may not be summarised or reproduced into other
+      channels.
+    owner: legal-ops@example.com
+    severity: critical
+    remediation: Contact Legal Ops. Privilege is not waivable in-product.
+    enforce:
+      - layer: retrieval
+        action: deny
+        type: wall
+        domains: [privileged]
+        allowed_users: [counsel@example.com]
+      - layer: accumulation
+        action: deny
+        type: domain_join
+        domains: [privileged, chat]
+        require_entity_overlap: false
+        scope: user
+        window: 4h
+    tests:
+      - name: counsel_may_read
+        expect: allow
+        user: counsel@example.com
+        sequence:
+          - {domain: privileged, entities: []}
+      - name: others_may_not
+        expect: deny
+        sequence:
+          - {domain: privileged, entities: []}
+      - name: counsel_may_not_carry_it_into_chat
+        expect: deny
+        user: counsel@example.com
+        sequence:
+          - {domain: privileged, entities: []}
+          - {domain: chat, entities: []}
+
+  # ---- Embargo window ----
+  - rule_id: COC-MGMT-001
+    clause: >
+      Restructuring plans are confidential until announced and may not be
+      retrieved, inferred or discussed by anyone outside the planning team
+      before the announcement date.
+    owner: ceo-office@example.com
+    severity: critical
+    remediation: The announcement date is set by the CEO office; nothing is available earlier.
+    enforce:
+      - layer: retrieval
+        action: deny
+        type: wall
+        domains: [restructuring-plan]
+        allowed_users: [cfo@example.com, chro@example.com]
+        until: 2099-01-01
+    tests:
+      - name: planning_team_may_read
+        expect: allow
+        user: cfo@example.com
+        sequence:
+          - {domain: restructuring-plan, entities: []}
+      - name: everyone_else_waits
+        expect: deny
+        sequence:
+          - {domain: restructuring-plan, entities: []}
+
+  # ---- Investigation wall ----
+  - rule_id: COC-LEGAL-003
+    clause: >
+      The subject of an internal investigation may not access the case file
+      while the investigation is open.
+    owner: legal-ops@example.com
+    severity: critical
+    remediation: Investigation records are shared with the subject by Legal at the appropriate stage.
+    enforce:
+      - layer: retrieval
+        action: deny
+        type: wall
+        domains: [investigation-case-42]
+        blocked_users: [subject42@example.com]
+        until: 2099-01-01
+    tests:
+      - name: investigator_reads_the_case
+        expect: allow
+        sequence:
+          - {domain: investigation-case-42, entities: []}
+      - name: the_subject_cannot
+        expect: deny
+        user: subject42@example.com
+        sequence:
+          - {domain: investigation-case-42, entities: []}
+
+  # ---- Consultation quiet period ----
+  - rule_id: COC-MGMT-002
+    clause: >
+      While a works-council consultation is open, site-level financial data
+      may not be combined with headcount data by anyone outside the
+      consultation team.
+    owner: chro@example.com
+    severity: high
+    remediation: Site analyses during a consultation are prepared by the consultation team only.
+    enforce:
+      - layer: accumulation
+        action: deny
+        type: domain_join
+        domains: [site-finance, headcount]
+        require_entity_overlap: false
+        allowed_users: [chro@example.com]
+        until: 2099-01-01
+        scope: user
+        window: 24h
+    tests:
+      - name: consultation_team_may_model
+        expect: allow
+        user: chro@example.com
+        sequence:
+          - {domain: site-finance, entities: []}
+          - {domain: headcount, entities: []}
+      - name: a_manager_may_not
+        expect: deny
+        sequence:
+          - {domain: site-finance, entities: []}
+          - {domain: headcount, entities: []}
+
