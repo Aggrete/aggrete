@@ -203,6 +203,45 @@ inspects JSON tools/call results for post-call recording.
 | A company | Helm/Docker behind your IdP, then make `https://aggrete.<corp>/mcp` the *only* MCP server your assistant policies allow (Claude Code managed settings, Claude Enterprise connectors, Copilot/Cursor org policies), with connectors network-restricted to the Aggrete hosts |
 | Existing gateway | `aggrete.plugin` (above) |
 
+
+## Putting a real system behind the proxy: Google Drive
+
+`aggrete/connectors/drive.py` is a Drive upstream the proxy runs itself. How
+it is done, in the order you do it:
+
+1. **A service account, not a person.** In Google Cloud: enable the Drive API,
+   create a service account (say `aggrete-drive`), download its JSON key. The
+   proxy holds the key; nobody's personal Google login is involved, which is
+   what makes the proxy the only road.
+2. **Share the folders, read only.** In Drive, create a root folder (say
+   `Northwind`) with one subfolder per kind of material (`Restructuring plan`,
+   `Legal hold`, `Team documents`) and share the root with the service account
+   email as **Viewer**. Service accounts own nothing; they only see what is
+   shared with them.
+3. **One tool pair per folder.** The connector lists the root's subfolders and
+   exposes `search_<folder>` and `read_<folder>` for each, so the policy can
+   name folders:
+   ```yaml
+   upstreams:
+     drive: {command: python3, args: [-m, aggrete.connectors.drive, --credentials, /opt/aggrete/drive-sa.json, --root, Northwind]}
+   domains:
+     "drive__*_restructuring_plan": restructuring-plan   # clause 7.9: embargo until announced
+     "drive__*_legal_hold": legal-hold                    # clause 7.3: never for assistants
+     "drive__*": drive-general
+   ```
+4. **Results name people.** Every file comes back with `owner_email` and
+   `editor_email`, so the policy's tallies and joins work on Drive results
+   like on HR records.
+5. **Remove the direct road.** Disable the assistant's native Drive connector
+   for governed accounts (Claude Enterprise: managed connectors; personal
+   accounts: remove it). Otherwise the assistant has two ways to Drive and the
+   policy only sees one.
+
+`python -m aggrete.connectors.drive --credentials sa.json --root Northwind --list`
+prints the tools that will be exposed. If the root is not shared yet the
+connector still starts and exposes a single `status` tool that says what is
+missing, so the proxy never fails to boot because of Drive.
+
 ## Starting from the document you already have
 
 `aggrete/ingest.py` turns a code-of-conduct document into a draft `coc.yaml`:
