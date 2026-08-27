@@ -262,6 +262,15 @@ def build_http_app(server: Server, cfg: dict, connect):
                                      client_registration_options=ClientRegistrationOptions(enabled=True, valid_scopes=["mcp"], default_scopes=["mcp"]),
                                      revocation_options=RevocationOptions(enabled=True))
         routes.append(Route("/signin", signin.signin, methods=["GET", "POST"]))
+
+    brand = cfg.get("brand", {})
+    if brand.get("icon_file"):
+        from starlette.responses import FileResponse
+        icon_path = str((Path(cfg.get("_config_dir", ".")) / brand["icon_file"]).resolve())
+        async def _icon(request):
+            return FileResponse(icon_path, media_type=brand.get("icon_mime", "image/svg+xml"))
+        routes.append(Route("/icon.svg", _icon))
+        routes.append(Route("/favicon.ico", _icon))
     if resource_url:
         routes += create_protected_resource_routes(
             resource_url=AnyHttpUrl(resource_url),
@@ -295,13 +304,21 @@ async def main() -> None:
 
     cfg = yaml.safe_load(Path(args.config).read_text())
     root = Path(args.config).parent
+    cfg["_config_dir"] = str(root)
     engine = Engine(str(root / cfg.get("coc", "coc.yaml")), build_store(cfg.get("store")))
     audit = Audit(cfg.get("audit_log"))
     proxy = Proxy(cfg, engine, audit)
 
+    brand = cfg.get("brand", {})
+    icons = None
+    if brand.get("icon_url"):
+        icons = [types.Icon(src=brand["icon_url"], mime_type=brand.get("icon_mime", "image/svg+xml"))]
     server = Server(
         "aggrete",
         version="0.1.0",
+        title=brand.get("title", "Aggrete"),
+        website_url=brand.get("website_url", "https://aggrete.com"),
+        icons=icons,
         on_list_tools=proxy.list_tools,
         on_call_tool=proxy.call_tool,
     )
