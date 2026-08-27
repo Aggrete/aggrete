@@ -68,3 +68,23 @@ def test_middleware_state_is_per_identity():
         asyncio.run(call(app, tool, user="alice"))
     r = asyncio.run(call(app, "ops__oncall_draft", user="bob"))
     assert "shifts" in r["result"]["content"][0]["text"]
+
+
+def test_audit_rows_carry_entity_ids(tmp_path):
+    """Post-call rows record who appeared, so the console can replay policies."""
+    import json, subprocess, sys, os, asyncio, contextlib, yaml
+    from mcp import ClientSession
+    from mcp.client.stdio import StdioServerParameters, stdio_client
+    cfg = yaml.safe_load((ROOT / "proxy.config.yaml").read_text())
+    cfg["coc"] = str(ROOT / "coc.yaml"); cfg["audit_log"] = str(tmp_path / "a.jsonl")
+    path = tmp_path / "p.yaml"; path.write_text(yaml.safe_dump(cfg))
+    async def go():
+        params = StdioServerParameters(command=sys.executable, args=["-m", "aggrete.proxy", "--config", str(path)],
+                                       cwd=str(ROOT), env={**os.environ, "PYTHONPATH": str(ROOT)})
+        async with contextlib.AsyncExitStack() as st:
+            r, w = await st.enter_async_context(stdio_client(params))
+            s = await st.enter_async_context(ClientSession(r, w)); await s.initialize()
+            await s.call_tool("finance__budget_roles", {"team": "platform"})
+    asyncio.run(go())
+    row = json.loads((tmp_path / "a.jsonl").read_text().splitlines()[-1])
+    assert row["entities"] == 6 and len(row["entity_ids"]) == 6 and row["entity_ids"][0].startswith("p:")

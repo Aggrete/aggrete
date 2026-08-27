@@ -185,6 +185,7 @@ class Proxy:
 
         self.audit.emit(user=self.user, tool=name, domain=domain, stage="post",
                         entities=len(ents), decision="deny" if not post.allow else "allow",
+                        entity_ids=(ents if self.cfg.get("audit_entities", True) else None),
                         rule=post.rule_id, alerts=post.alerts, evidence=post.evidence,
                         purpose=pre.granted_purpose)
 
