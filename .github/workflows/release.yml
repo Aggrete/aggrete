@@ -1,25 +1,61 @@
 name: release
-on: { push: { tags: ["v*"] } }
-permissions: { contents: read, packages: write, id-token: write }
+
+# Publishing a GitHub Release (which points at a v* tag) builds the container
+# image and publishes the package to PyPI. PyPI auth uses Trusted Publishing
+# (OIDC): there is no API token stored in this repository.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
 jobs:
   image:
+    name: Publish container image to GHCR
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v4
       - uses: docker/login-action@v3
-        with: { registry: ghcr.io, username: "${{ github.actor }}", password: "${{ secrets.GITHUB_TOKEN }}" }
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - uses: docker/build-push-action@v6
         with:
           push: true
           tags: |
             ghcr.io/${{ github.repository }}:${{ github.ref_name }}
             ghcr.io/${{ github.repository }}:latest
+
   pypi:
+    name: Publish package to PyPI
     runs-on: ubuntu-latest
-    environment: pypi   # create this environment and enable Trusted Publishing on PyPI for it
+    environment:
+      name: pypi
+      url: https://pypi.org/project/aggrete/
+    permissions:
+      contents: read
+      id-token: write        # OIDC for Trusted Publishing; no API token needed
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with: { python-version: "3.13" }
-      - run: pip install build && python -m build
+        with:
+          python-version: "3.13"
+      - name: Release tag matches package version
+        if: github.event_name == 'release'
+        run: |
+          pkg=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          tag="${GITHUB_REF_NAME#v}"
+          echo "package=$pkg  tag=$tag"
+          test "$pkg" = "$tag" || { echo "::error::release tag ($tag) does not match pyproject version ($pkg)"; exit 1; }
+      - name: Build and check
+        run: |
+          python -m pip install --upgrade build twine
+          python -m build
+          twine check dist/*
       - uses: pypa/gh-action-pypi-publish@release/v1
