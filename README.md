@@ -157,9 +157,12 @@ URL `https://mcp.example.com/mcp`. Claude discovers the sign-in from the
 proxy's OAuth metadata, registers itself, and sends you to `/signin`. From then
 on every question Claude asks on your behalf passes the policy.
 
-Sample handbook: `samples/northwind-handbook.docx`; `coc.yaml` maps to its
-clauses 7.1 to 7.11 one to one (7.4 and 7.12 are not enforceable at a data
-proxy). `aggrete-ingest samples/northwind-handbook.docx` reproduces it.
+Sample handbook: `samples/northwind-handbook.docx` (synthetic, tailored to the
+rule types); `coc.yaml` maps to its clauses 7.1 to 7.11 one to one (7.4 and
+7.12 are not enforceable at a data proxy). `aggrete-ingest
+samples/northwind-handbook.docx` reproduces it. The `samples/` directory also
+has real public-domain examples (GSA/TTS code of conduct, Indiana state
+employee handbook); see [`samples/README.md`](samples/README.md).
 
 ## Serving it to a whole company: streamable HTTP + OAuth
 
