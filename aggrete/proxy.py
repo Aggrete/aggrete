@@ -38,6 +38,8 @@ from mcp.server.stdio import stdio_server
 from .auth import build_verifier, identity_for, unexpired
 from .entities import extract
 from .policy import Engine
+from .audit import Audit
+from .redact import rules_from_config, redact
 
 SEP = "__"
 ENV_REF = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
@@ -53,22 +55,6 @@ def expand_env(value: str) -> str:
     return ENV_REF.sub(sub, value)
 
 
-class Audit:
-    """Every tool call, its labels, and the decision. This is the record you
-    will actually want later. Prompts tell you what was asked, this tells you
-    what was handed over."""
-
-    def __init__(self, path: str | None):
-        self.fh = open(path, "a") if path else None
-
-    def emit(self, **row):
-        row["ts"] = time.time()
-        line = json.dumps(row, default=str)
-        print(f"[audit] {line}", file=sys.stderr)
-        if self.fh:
-            self.fh.write(line + "\n")
-            self.fh.flush()
-
 
 class Proxy:
     def __init__(self, config: dict, engine: Engine, audit: Audit):
@@ -78,6 +64,7 @@ class Proxy:
         self.sessions: dict[str, ClientSession] = {}
         self.static_user = config.get("user", "unknown")
         self.identity_claim = (config.get("auth") or {}).get("identity_claim")
+        self.redact_rules = rules_from_config(config.get("redact"))
 
     @property
     def user(self) -> str:
@@ -141,6 +128,8 @@ class Proxy:
                 name = f"{upstream}{SEP}{t.name}"
                 if not self._tool_allowed(name):
                     continue  # tool filtering: what is never listed is never called
+                if not self.engine.tool_visible(self.user, self.domain_for(name)):
+                    continue  # selective exposure: walls and blocks hide tools per user
                 tools.append(
                     types.Tool(
                         name=name,
@@ -183,16 +172,37 @@ class Proxy:
         ents = extract(text)
         post = self.engine.post_call(self.user, domain, ents)
 
+        redacted: dict = {}
+        if post.allow and self.redact_rules:
+            result, redacted = self._redact_result(result)
+
         self.audit.emit(user=self.user, tool=name, domain=domain, stage="post",
                         entities=len(ents), decision="deny" if not post.allow else "allow",
                         entity_ids=(ents if self.cfg.get("audit_entities", True) else None),
                         rule=post.rule_id, alerts=post.alerts, evidence=post.evidence,
-                        purpose=pre.granted_purpose)
+                        redacted=(redacted or None), purpose=pre.granted_purpose)
 
         if not post.allow:
             # The data left the upstream, but it does not reach the model.
             return self._refuse(post.explain())
         return result
+
+    def _redact_result(self, result: types.CallToolResult):
+        """Mask secrets/PII in text content before it reaches the model.
+        Enforcement already ran on the original text; this only touches the
+        payload handed back to the assistant."""
+        total: dict = {}
+        new_content = []
+        for c in result.content:
+            if isinstance(c, types.TextContent):
+                masked, counts = redact(c.text, self.redact_rules)
+                for k, v in counts.items():
+                    total[k] = total.get(k, 0) + v
+                new_content.append(types.TextContent(type="text", text=masked))
+            else:
+                new_content.append(c)
+        result.content = new_content
+        return result, total
 
     def _refuse(self, message: str) -> types.CallToolResult:
         # Not is_error: the model should read this and relay it, not retry it.

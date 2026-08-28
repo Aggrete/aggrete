@@ -43,6 +43,12 @@ brand:
   icon_mime: image/svg+xml
 audit_entities: true    # record which people appeared in each result (needed for policy replay and inference distance)
 
+# Mask secrets and PII in results before they reach the model. Enforcement still
+# runs on the original text; only the returned payload is masked, and each hit is
+# counted in the audit line. Use `true` for the default set, or list rule names:
+# email, ssn, credit_card, aws_key, api_key, bearer, ip.
+redact: [email, ssn, credit_card, aws_key, api_key, bearer]
+
 upstreams:
   hr:
     command: python3

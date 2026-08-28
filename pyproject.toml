@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aggrete"
-version = "0.1.0"
+version = "0.2.0"
 description = "An MCP proxy that enforces your code of conduct across connectors. Permission is not need-to-know."
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -35,6 +35,7 @@ dev = ["pytest", "redis>=5", "anthropic>=1.0"]
 [project.scripts]
 aggrete = "aggrete.proxy:cli"
 aggrete-ingest = "aggrete.ingest:main"
+aggrete-audit = "aggrete.audit:main"
 
 [project.urls]
 Homepage = "https://aggrete.com"

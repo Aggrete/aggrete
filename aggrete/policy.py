@@ -143,6 +143,27 @@ class Engine:
                 )
         return Decision(allow=True)
 
+    def tool_visible(self, user: str, domain: str | None) -> bool:
+        """Whether a tool in `domain` should even be listed for `user`.
+
+        Static gates hide tools from people who could never call them: a
+        `domain_block` domain, or a `wall` the user is not exempt from and has
+        no granted purpose for. Accumulation rules (`domain_join`) do not hide
+        anything, because the tool is fine until the forbidden set is completed.
+        What is never listed is never called.
+        """
+        if not domain:
+            return True
+        for rule in self.rules:
+            for e in rule.blocks("domain_block"):
+                if domain in e["domains"] and e.get("action", "deny") == "deny" and in_scope(e, user):
+                    return False
+            for e in rule.blocks("wall"):
+                if domain in e["domains"] and in_scope(e, user) and e.get("action", "deny") == "deny":
+                    if not self.store.granted(user, rule.id):
+                        return False
+        return True
+
     # ---------- after the upstream call ----------
 
     def post_call(self, user: str, domain: str, entities: list[str]) -> Decision:
