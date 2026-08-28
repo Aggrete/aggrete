@@ -1,5 +1,6 @@
 # Build stage: the -dev variant ships pip and a shell.
 FROM cgr.dev/chainguard/python:latest-dev AS build
+USER root
 WORKDIR /app
 COPY pyproject.toml README.md ./
 COPY aggrete ./aggrete
