@@ -1,5 +1,9 @@
 # Aggrete
 
+[![PyPI version](https://img.shields.io/pypi/v/aggrete)](https://pypi.org/project/aggrete/)
+[![Python versions](https://img.shields.io/pypi/pyversions/aggrete)](https://pypi.org/project/aggrete/)
+[![License](https://img.shields.io/pypi/l/aggrete)](https://github.com/cjohannsen81/aggrete/blob/main/LICENSE)
+
 The open-source proxy. Product site: https://aggrete.com. This repo is the proxy and nothing else: engine, accumulator, ingest CLI, Helm chart.
 
 An MCP proxy that enforces a **code of conduct document** across connectors, with
@@ -12,6 +16,15 @@ person has already pulled today, something the code of conduct forbids?*
 
 Four individually-authorized questions can assemble a layoff list. No guardrail
 fires, because no single question was sensitive. This proxy is the missing layer.
+
+## Install
+
+```bash
+pip install aggrete            # published on PyPI
+aggrete --config proxy.config.yaml
+```
+
+Or clone this repo to get the demo, sample policy and Helm chart.
 
 ## Run it
 

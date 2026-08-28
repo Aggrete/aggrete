@@ -7,3 +7,5 @@ audit.jsonl
 coc.draft.yaml
 build/
 *.egg-info/
+dist/
+.pypirc
