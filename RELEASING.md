@@ -1,54 +1,66 @@
 # Releasing
 
-Aggrete is published to PyPI as [`aggrete`](https://pypi.org/project/aggrete/).
-Releases are cut from `main`.
+Aggrete is published to PyPI as [`aggrete`](https://pypi.org/project/aggrete/)
+and as a container image on GHCR. Releases are cut from `main`.
+
+Publishing is automated: creating a **GitHub Release** builds the image and
+publishes the package. PyPI authentication uses **Trusted Publishing** (OIDC),
+so no API token is stored in this repository.
 
 ## One time setup
 
-- A PyPI account with a verified email and two-factor authentication enabled.
-- A project-scoped API token: PyPI, Account settings, API tokens, scope
-  "Project: aggrete". Paste it at the upload prompt or store it in `~/.pypirc`
-  (`chmod 600`). Never commit it.
-- Build tooling in your environment: `pip install build twine`.
+Both steps are done once, in a browser, by a maintainer.
+
+1. **PyPI Trusted Publisher.** On
+   <https://pypi.org/manage/project/aggrete/settings/publishing/>, add a GitHub
+   publisher:
+   - Owner: `cjohannsen81`
+   - Repository: `aggrete`
+   - Workflow name: `release.yml`
+   - Environment name: `pypi`
+
+2. **GitHub environment.** In the repository, Settings, Environments, create an
+   environment named `pypi`. Optionally add required reviewers so a release
+   pauses for a manual approval before it reaches PyPI.
+
+No secrets are needed. The workflow requests a short-lived OIDC token at publish
+time; PyPI trusts it because of the publisher configured above.
 
 ## Cut a release
 
 1. Bump `version` in `pyproject.toml`. Use semantic versioning. A version on PyPI
    is immutable, so every change must ship under a new number.
-2. Update the changelog or release notes.
-3. Build clean artifacts:
-
-   ```bash
-   rm -rf dist/ && python -m build
-   ```
-
-4. Verify before uploading:
-
-   ```bash
-   twine check dist/*
-   ```
-
-   Optionally install the wheel into a fresh virtualenv and run `aggrete --help`.
-
-5. Upload:
-
-   ```bash
-   twine upload dist/*
-   ```
-
-   Username `__token__`, password the API token.
-
-6. Confirm from a clean environment:
+2. Update the changelog or release notes. Commit and push to `main`.
+3. On GitHub, Releases, "Draft a new release". Create a new tag `v<version>`
+   (for example `v0.1.1`) targeting `main`, write the notes, and Publish.
+4. The `release` workflow runs automatically:
+   - builds the sdist and wheel, runs `twine check`, and checks that the tag
+     matches the `pyproject.toml` version,
+   - publishes to PyPI via Trusted Publishing,
+   - builds and pushes `ghcr.io/cjohannsen81/aggrete:<tag>` and `:latest`.
+5. Confirm from a clean environment:
 
    ```bash
    pip install aggrete
    aggrete --help
    ```
 
-7. Tag the release: `git tag v<version> && git push --tags`.
+If the tag and the `pyproject.toml` version disagree, the PyPI job fails on
+purpose before anything is published. Bump one to match and cut a new tag.
+
+## Manual fallback
+
+If you need to publish without the workflow (Trusted Publishing does not work
+from a laptop, so this path uses an API token):
+
+```bash
+rm -rf dist/ && python -m build
+twine check dist/*
+twine upload dist/*        # username __token__, password a project-scoped token
+```
 
 ## Notes
 
 - `dist/` is build output and is not committed.
-- Once the project exists on PyPI, keep tokens project-scoped and delete any
-  account-wide token used for a first upload.
+- Keep PyPI tokens project-scoped, and delete any account-wide token that was
+  used for a first manual upload.
