@@ -26,6 +26,23 @@ aggrete --config proxy.config.yaml
 
 Or clone this repo to get the demo, sample policy and Helm chart.
 
+
+## What the proxy does (0.2)
+
+- Refuses forbidden calls **before** the upstream is contacted, using a YAML
+  policy and per-user memory that accumulates across calls and sessions.
+- **Tamper-evident audit**: every decision is one hash-chained JSON line. Verify
+  with `aggrete-audit audit.jsonl` (breaks are reported by line number).
+- **Selective tool exposure**: walls and blocks in the policy hide tools from
+  users who could never call them, so they are never listed.
+- **Output redaction**: `redact:` masks emails, SSNs, card numbers, API keys and
+  bearer tokens in results before they reach the model; hits are counted in the audit.
+- Holds the upstream credentials itself and never forwards the caller's token to
+  an upstream (confused-deputy safe).
+
+See [`ROADMAP.md`](ROADMAP.md) for what is shipped, in progress, and planned,
+with the community requests behind each item.
+
 ## Run it
 
 ```bash
