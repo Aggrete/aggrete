@@ -31,6 +31,7 @@ Or clone this repo to get the demo, sample policy and Helm chart.
 
 ## What the proxy does (0.2)
 
+- **Try it in one command:** `aggrete --demo` (or `docker run --rm ghcr.io/cjohannsen81/aggrete --demo`) runs the four-question walkthrough with no config, auth, or network.
 - Refuses forbidden calls **before** the upstream is contacted, using a YAML
   policy and per-user memory that accumulates across calls and sessions.
 - **Tamper-evident audit**: every decision is one hash-chained JSON line. Verify
