@@ -10,8 +10,59 @@ defaults:
   window: 24h
   entity_kind: person
 
+packs:
+  - id: code-of-conduct
+    name: Code of conduct
+    description: Stops assistants from combining records into things your handbook forbids, like a layoff list or a pay ranking.
+    example: "Budget + personnel + rota, refused before it forms."
+    watches: [hr-personnel, finance-comp, ops-rota]
+    enabled: true
+  - id: financial-info-barrier
+    name: Financial info-barriers
+    description: Keeps the research and trading sides apart, so material non-public information cannot cross the wall through an assistant.
+    example: "Trading desk asks for advisory docs, blocked. (SEC 15(g), FINRA 2241)"
+    watches: [deal-advisory]
+    enabled: true
+  - id: hipaa
+    name: HIPAA minimum-necessary
+    description: Keeps individual health records away from assistants that should not see them, and masks identifiers in results.
+    example: "Whole-record pull, refused; identifiers masked."
+    watches: [health-records]
+    enabled: true
+  - id: secrets-dlp
+    name: Secrets and IP
+    description: Keeps secret stores and source code away from assistants, and masks keys and tokens in results.
+    example: "Assistant reaches the secret store, refused."
+    watches: [secrets-store]
+    enabled: true
+  - id: prompt-injection
+    name: Prompt-injection shield
+    description: Breaks the toxic flow. Once an assistant reads untrusted content, it cannot then send data out through another tool.
+    example: "Poisoned issue, private-repo leak stopped."
+    watches: [public-issues, private-repos]
+    enabled: true
+  - id: legal-hold
+    name: Legal hold and privilege
+    description: Keeps documents under legal hold or attorney-client privilege out of assistant answers.
+    example: "Summarise the hold folder, refused."
+    watches: [legal-hold, privileged, investigation-case-42]
+    enabled: true
+  - id: export-control
+    name: Export control
+    description: Blocks controlled technical data from reaching a person who is not cleared to receive it.
+    example: "Uncleared account requests a controlled file, refused. (22 CFR 120.50)"
+    watches: [export-controlled]
+    enabled: false
+  - id: data-residency
+    name: Data residency
+    description: Stops EU personal data from being served to a requester outside the region.
+    example: "Out-of-region caller pulls EU HR data, blocked. (GDPR Ch. V)"
+    watches: [eu-personal-data]
+    enabled: false
+
 rules:
   - rule_id: COC-HR-004
+    pack: code-of-conduct
     title: Combining personnel, budget and rotation records
     clause: >
       Personnel records, compensation or budget records, and operational
@@ -52,6 +103,7 @@ rules:
           - {domain: ops-rota, entities: [p:frank]}
 
   - rule_id: COC-HR-011
+    pack: code-of-conduct
     title: Bulk lists of people
     clause: >
       Assistants may not be used to assemble rosters or lists of individuals
@@ -80,6 +132,7 @@ rules:
           - {domain: hr-personnel, entities: [p:a, p:b, p:c, p:d, p:e, p:f, p:g, p:h, p:i]}
 
   - rule_id: COC-LEGAL-001
+    pack: legal-hold
     title: Legal hold material
     clause: >
       Content under legal hold is not available to assistants under any
@@ -103,6 +156,7 @@ rules:
           - {domain: ops-rota, entities: [p:alice]}
 
   - rule_id: COC-HR-021
+    pack: code-of-conduct
     title: Comparing colleagues' timesheets
     clause: >
       Records of colleagues' working time, attendance or output may not be
@@ -144,6 +198,7 @@ rules:
 
   # ---- Aggregate-only answers (EU Pay Transparency) ----
   - rule_id: COC-HR-031
+    pack: code-of-conduct
     title: Pay figures for small groups
     clause: >
       Pay information may be shared with employees only as averages for
@@ -174,6 +229,7 @@ rules:
 
   # ---- Protected-attribute firewall for AI-written reviews ----
   - rule_id: COC-HR-032
+    pack: code-of-conduct
     title: Health and absence in performance reviews
     clause: >
       Performance assessments may not draw on health, absence, leave or
@@ -204,6 +260,7 @@ rules:
 
   # ---- Privilege containment ----
   - rule_id: COC-LEGAL-002
+    pack: legal-hold
     title: Privileged legal material
     clause: >
       Privileged legal material is available only to the counsel of record
@@ -244,6 +301,7 @@ rules:
 
   # ---- Embargo window ----
   - rule_id: COC-MGMT-001
+    pack: code-of-conduct
     title: Restructuring plans before the announcement
     clause: >
       Restructuring plans are confidential until announced and may not be
@@ -272,6 +330,7 @@ rules:
 
   # ---- Investigation wall ----
   - rule_id: COC-LEGAL-003
+    pack: legal-hold
     title: The subject of an investigation and the case file
     clause: >
       The subject of an internal investigation may not access the case file
@@ -299,6 +358,7 @@ rules:
 
   # ---- Consultation quiet period ----
   - rule_id: COC-MGMT-002
+    pack: code-of-conduct
     title: Site finances and headcount during a consultation
     clause: >
       While a works-council consultation is open, site-level financial data
@@ -332,6 +392,7 @@ rules:
 
   # ---- A colleague's absence is health data ----
   - rule_id: COC-HR-033
+    pack: code-of-conduct
     title: A colleague's absence and health records
     clause: >
       Absence, leave and sickness records of an identifiable individual are
@@ -359,3 +420,138 @@ rules:
         sequence:
           - {domain: health-absence, entities: []}
 
+
+  # ---- Protection pack: Financial info-barriers ----
+  - rule_id: COC-FIN-001
+    pack: financial-info-barrier
+    title: Research and trading information barrier
+    clause: >
+      The advisory side and the trading side must stay separated. Material
+      non-public information may not cross the wall through an assistant.
+    owner: compliance@example.com
+    severity: high
+    remediation: >
+      Deal-advisory material is available to the deal team only. Confirm your
+      permitted side of the wall with Compliance.
+    enforce:
+      - layer: retrieval
+        action: deny
+        type: wall
+        domains: [deal-advisory]
+        allowed_users: [deal-team@example.com]
+    tests:
+      - {name: deal_team_may_read, expect: allow, user: deal-team@example.com, sequence: [{domain: deal-advisory, entities: []}]}
+      - {name: trading_desk_may_not, expect: deny, user: trader@example.com, sequence: [{domain: deal-advisory, entities: []}]}
+
+  # ---- Protection pack: HIPAA minimum-necessary ----
+  - rule_id: COC-HIPAA-001
+    pack: hipaa
+    title: Individual health records are minimum-necessary
+    clause: >
+      Individual health records are available only to the care team. Assistants
+      may not pull whole records for identifiable people.
+    owner: privacy@example.com
+    severity: high
+    remediation: >
+      Health records are limited to the care team. Ask Privacy if your task
+      requires access.
+    enforce:
+      - layer: retrieval
+        action: deny
+        type: wall
+        domains: [health-records]
+        allowed_users: [care-team@example.com]
+    tests:
+      - {name: care_team_may_read, expect: allow, user: care-team@example.com, sequence: [{domain: health-records, entities: []}]}
+      - {name: others_may_not, expect: deny, sequence: [{domain: health-records, entities: []}]}
+
+  # ---- Protection pack: Secrets and IP ----
+  - rule_id: COC-SEC-001
+    pack: secrets-dlp
+    title: Secret stores are off-limits to assistants
+    clause: >
+      Secret stores, credentials and key vaults are never available to
+      assistants. Keys and tokens in results are masked.
+    owner: security@example.com
+    severity: high
+    remediation: >
+      The secret store is not reachable through assistants. Use your normal
+      break-glass process for credentials.
+    enforce:
+      - layer: retrieval
+        action: deny
+        type: domain_block
+        domains: [secrets-store]
+    tests:
+      - {name: normal_work_is_fine, expect: allow, sequence: [{domain: hr-personnel, entities: []}]}
+      - {name: secret_store_is_blocked, expect: deny, sequence: [{domain: secrets-store, entities: []}]}
+
+  # ---- Protection pack: Prompt-injection shield ----
+  - rule_id: COC-SEC-002
+    pack: prompt-injection
+    title: No egress after reading untrusted content
+    clause: >
+      Once an assistant has read untrusted content in a session, it may not then
+      reach a tool that can send data out. This breaks prompt-injection exfiltration.
+    owner: security@example.com
+    severity: high
+    remediation: >
+      Start a fresh session that has not read untrusted content, or ask Security
+      to review the flow.
+    enforce:
+      - layer: retrieval
+        action: deny
+        type: flow
+        taint_domains: [public-issues, untrusted-web]
+        egress_domains: [private-repos, external-share]
+    tests:
+      - {name: egress_without_taint_is_fine, expect: allow, sequence: [{domain: private-repos, entities: []}]}
+      - name: egress_after_untrusted_is_blocked
+        expect: deny
+        sequence:
+          - {domain: public-issues, entities: []}
+          - {domain: private-repos, entities: []}
+
+  # ---- Protection pack: Export control ----
+  - rule_id: COC-EXP-001
+    pack: export-control
+    title: Export-controlled data to cleared persons only
+    clause: >
+      Controlled technical data may be released only to a person cleared to
+      receive it. Serving it to an uncleared account is itself the violation.
+    owner: trade-compliance@example.com
+    severity: high
+    remediation: >
+      Export-controlled material is limited to cleared personnel. Confirm your
+      clearance with Trade Compliance.
+    enforce:
+      - layer: retrieval
+        action: deny
+        type: wall
+        domains: [export-controlled]
+        allowed_users: [cleared@example.com]
+    tests:
+      - {name: cleared_person_may_read, expect: allow, user: cleared@example.com, sequence: [{domain: export-controlled, entities: []}]}
+      - {name: uncleared_may_not, expect: deny, user: contractor@example.com, sequence: [{domain: export-controlled, entities: []}]}
+
+  # ---- Protection pack: Data residency ----
+  - rule_id: COC-RES-001
+    pack: data-residency
+    title: EU personal data stays in region
+    clause: >
+      EU personal data may be served only to requesters in the region, absent a
+      documented transfer basis.
+    owner: dpo@example.com
+    severity: high
+    remediation: >
+      Out-of-region access to EU personal data needs a documented transfer basis.
+      Contact the Data Protection Officer.
+    enforce:
+      - layer: retrieval
+        action: deny
+        type: wall
+        domains: [eu-personal-data]
+        allowed_users: [eu-user@example.com]
+    tests:
+      - {name: in_region_may_read, expect: allow, user: eu-user@example.com, sequence: [{domain: eu-personal-data, entities: []}]}
+      - {name: out_of_region_may_not, expect: deny, user: us-user@example.com, sequence: [{domain: eu-personal-data, entities: []}]}

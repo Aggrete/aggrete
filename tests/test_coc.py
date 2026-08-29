@@ -19,6 +19,8 @@ COC = str(pathlib.Path(__file__).resolve().parents[1] / "coc.yaml")
 
 def run_sequence(steps, user: str = "test@example.com") -> str:
     engine = Engine(COC, MemoryStore())
+    for _p in engine.pack_meta:            # validate every rule regardless of its pack's default state
+        engine.set_pack(_p["id"], True)
     outcome = "allow"
     for step in steps:
         pre = engine.pre_call(user, step["domain"])
