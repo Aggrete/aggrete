@@ -1,0 +1,28 @@
+name: Policy rule request
+description: Describe a code-of-conduct clause you want Aggrete to enforce
+title: "[Rule]: "
+labels: ["rule-type"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Aggrete turns handbook clauses into enforceable rules. Tell us a clause you cannot enforce yet.
+  - type: textarea
+    id: clause
+    attributes:
+      label: The clause or policy, in your own words
+      placeholder: '"Absence records may not be combined with performance reviews."'
+    validations:
+      required: true
+  - type: textarea
+    id: refuse
+    attributes:
+      label: A request that should be refused
+      description: What might someone ask an assistant that this rule should block?
+    validations:
+      required: true
+  - type: textarea
+    id: allow
+    attributes:
+      label: A similar request that should be allowed
+      description: So the rule does not get in the way of normal work.

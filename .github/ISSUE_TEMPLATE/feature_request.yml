@@ -1,0 +1,48 @@
+name: Feature request
+description: Suggest an improvement or a new capability for Aggrete
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping shape Aggrete. Feature priorities come straight from requests like this one.
+        Skim the [roadmap](https://github.com/cjohannsen81/aggrete/blob/main/ROADMAP.md) first in case it is already planned.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: The situation or risk you are facing, in plain terms.
+      placeholder: "As an HR admin, I want to make sure that ..."
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like Aggrete to do?
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Policy / rules
+        - Identity / auth
+        - Audit / observability
+        - Connectors / integrations
+        - Deployment / ops
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: example
+    attributes:
+      label: A concrete example (optional)
+      description: A request that should be allowed, and one that should be refused.
+  - type: checkboxes
+    id: adopt
+    attributes:
+      label: Impact
+      options:
+        - label: I would adopt Aggrete, or use it more, if this shipped
