@@ -511,6 +511,12 @@ rules:
         sequence:
           - {domain: public-issues, entities: []}
           - {domain: private-repos, entities: []}
+      - name: any_write_after_untrusted_is_blocked
+        expect: deny
+        sequence:
+          - {domain: public-issues, entities: []}
+          - {domain: drive-general, write: true, entities: []}
+      - {name: write_without_taint_is_fine, expect: allow, sequence: [{domain: drive-general, write: true, entities: []}]}
 
   # ---- Protection pack: Export control ----
   - rule_id: COC-EXP-001
@@ -555,3 +561,25 @@ rules:
     tests:
       - {name: in_region_may_read, expect: allow, user: eu-user@example.com, sequence: [{domain: eu-personal-data, entities: []}]}
       - {name: out_of_region_may_not, expect: deny, user: us-user@example.com, sequence: [{domain: eu-personal-data, entities: []}]}
+
+  # ---- Protection pack: Secrets and IP (write control) ----
+  - rule_id: COC-SEC-003
+    pack: secrets-dlp
+    title: No writing to external shares
+    clause: >
+      Assistants may read from an external share but may not create or modify
+      files there. Writing out is how data leaves.
+    owner: security@example.com
+    severity: high
+    remediation: >
+      Reads are allowed; writes to the external share are not. Ask Security if a
+      write is genuinely needed.
+    enforce:
+      - layer: retrieval
+        action: deny
+        type: domain_block
+        domains: [external-share]
+        applies: write
+    tests:
+      - {name: reading_external_share_is_fine, expect: allow, sequence: [{domain: external-share, entities: []}]}
+      - {name: writing_external_share_is_blocked, expect: deny, sequence: [{domain: external-share, write: true, entities: []}]}

@@ -23,7 +23,7 @@ def run_sequence(steps, user: str = "test@example.com") -> str:
         engine.set_pack(_p["id"], True)
     outcome = "allow"
     for step in steps:
-        pre = engine.pre_call(user, step["domain"])
+        pre = engine.pre_call(user, step["domain"], is_write=step.get("write", False))
         if not pre.allow:
             return "deny"
         post = engine.post_call(user, step["domain"], [f"p:{user}" if x == "p:self" else x for x in step.get("entities", [])])

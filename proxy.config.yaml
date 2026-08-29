@@ -77,6 +77,20 @@ domains:
 
 default_domain: unclassified
 
+# Which tools act on the world (write / egress). These are governed as writes:
+# any write after reading untrusted content is refused (prompt-injection shield),
+# and rules can target writes only with `applies: write`. Defaults cover the
+# common verbs; override to fit your connectors.
+write_tools:
+  - "*create*"
+  - "*update*"
+  - "*write*"
+  - "*upload*"
+  - "*delete*"
+  - "*post*"
+  - "*send*"
+  - "*share*"
+
 # Layer 1 substitute: tools that are never exposed at all.
 deny_tools:
   - "*__export_all*"
