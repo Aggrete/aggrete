@@ -4,6 +4,8 @@
 [![Python versions](https://img.shields.io/pypi/pyversions/aggrete)](https://pypi.org/project/aggrete/)
 [![License](https://img.shields.io/pypi/l/aggrete)](https://github.com/cjohannsen81/aggrete/blob/main/LICENSE)
 
+<p align="center"><img src="docs/demo.gif" alt="Aggrete refuses the fourth question before the upstream is contacted" width="720"></p>
+
 The open-source proxy. Product site: https://aggrete.com. This repo is the proxy and nothing else: engine, accumulator, ingest CLI, Helm chart.
 
 An MCP proxy that enforces a **code of conduct document** across connectors, with
