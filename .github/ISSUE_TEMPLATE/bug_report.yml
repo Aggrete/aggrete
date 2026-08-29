@@ -1,0 +1,30 @@
+name: Bug report
+description: Something is not working as expected
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what actually happened.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Config / policy used
+        2. Request made
+        3. ...
+  - type: input
+    id: version
+    attributes:
+      label: Aggrete version
+      placeholder: "0.2.0 (pip show aggrete)"
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant audit or error output
+      render: shell
