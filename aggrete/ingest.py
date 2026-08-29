@@ -214,6 +214,8 @@ def verify(coc: dict) -> list[str]:
             failures.append(f"{rule.id}: needs both an allow test and an alert/deny test")
         for t in rule.tests:
             engine, user, outcome = Engine(tmp, MemoryStore()), t.get("user", "t@example.com"), "allow"
+            for _p in engine.pack_meta:        # a rule's tests validate regardless of its pack's default state
+                engine.set_pack(_p["id"], True)
             for step in t["sequence"]:
                 if not engine.pre_call(user, step["domain"]).allow:
                     outcome = "deny"; break

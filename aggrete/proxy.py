@@ -322,7 +322,8 @@ async def main() -> None:
     cfg = yaml.safe_load(Path(args.config).read_text())
     root = Path(args.config).parent
     cfg["_config_dir"] = str(root)
-    engine = Engine(str(root / cfg.get("coc", "coc.yaml")), build_store(cfg.get("store")))
+    engine = Engine(str(root / cfg.get("coc", "coc.yaml")), build_store(cfg.get("store")),
+                    pack_state_path=cfg.get("pack_state"))
     audit = Audit(cfg.get("audit_log"))
     proxy = Proxy(cfg, engine, audit)
 
