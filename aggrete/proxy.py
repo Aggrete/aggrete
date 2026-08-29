@@ -42,6 +42,9 @@ from .audit import Audit
 from .redact import rules_from_config, redact
 
 SEP = "__"
+# Tools that act on the world (write / egress). Override with `write_tools:` in config.
+DEFAULT_WRITE_TOOLS = ["*create*", "*update*", "*write*", "*upload*", "*delete*",
+                       "*post*", "*send*", "*share*", "*append*", "*move*", "*put*"]
 ENV_REF = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
 
 
@@ -140,6 +143,11 @@ class Proxy:
                 )
         return types.ListToolsResult(tools=tools)
 
+    def _is_write(self, name: str) -> bool:
+        """A call that acts on the world (write/egress). Governed as egress by
+        the prompt-injection shield and by any `on: write` rule."""
+        return any(fnmatch.fnmatch(name, p) for p in self.cfg.get("write_tools", DEFAULT_WRITE_TOOLS))
+
     def _tool_allowed(self, name: str) -> bool:
         allow = self.cfg.get("allow_tools")
         deny = self.cfg.get("deny_tools", [])
@@ -154,10 +162,11 @@ class Proxy:
         if not self._tool_allowed(name):
             return self._refuse(f"Tool {name} is not available through this gateway.")
 
+        is_write = self._is_write(name)
         # --- Layer 3/4, before the fetch -----------------------------------
-        pre = self.engine.pre_call(self.user, domain)
+        pre = self.engine.pre_call(self.user, domain, is_write=is_write)
         if not pre.allow:
-            self.audit.emit(user=self.user, tool=name, domain=domain, stage="pre",
+            self.audit.emit(user=self.user, tool=name, domain=domain, stage="pre", write=is_write,
                             decision="deny", rule=pre.rule_id, evidence=pre.evidence)
             return self._refuse(pre.explain())
 
@@ -176,7 +185,7 @@ class Proxy:
         if post.allow and self.redact_rules:
             result, redacted = self._redact_result(result)
 
-        self.audit.emit(user=self.user, tool=name, domain=domain, stage="post",
+        self.audit.emit(user=self.user, tool=name, domain=domain, stage="post", write=is_write,
                         entities=len(ents), decision="deny" if not post.allow else "allow",
                         entity_ids=(ents if self.cfg.get("audit_entities", True) else None),
                         rule=post.rule_id, alerts=post.alerts, evidence=post.evidence,

@@ -29,7 +29,8 @@ import jwt
 from mcp.server.mcpserver import MCPServer
 
 API = "https://www.googleapis.com/drive/v3"
-SCOPE = "https://www.googleapis.com/auth/drive.readonly"
+READONLY_SCOPE = "https://www.googleapis.com/auth/drive.readonly"
+WRITE_SCOPE = "https://www.googleapis.com/auth/drive"
 EXPORT = {"application/vnd.google-apps.document": "text/plain",
           "application/vnd.google-apps.spreadsheet": "text/csv",
           "application/vnd.google-apps.presentation": "text/plain"}
@@ -43,8 +44,10 @@ def slug(name: str) -> str:
 class Drive:
     """Minimal Drive v3 client on a service account. No Google SDK: PyJWT + httpx."""
 
-    def __init__(self, credentials: str | Path):
+    def __init__(self, credentials: str | Path, writable: bool = False):
         self.sa = json.loads(Path(credentials).read_text())
+        self.scope = WRITE_SCOPE if writable else READONLY_SCOPE
+        self.writable = writable
         self._tok, self._exp = None, 0.0
         self.http = httpx.Client(timeout=30)
 
@@ -52,7 +55,7 @@ class Drive:
         if self._tok and time.time() < self._exp - 60:
             return self._tok
         now = int(time.time())
-        assertion = jwt.encode({"iss": self.sa["client_email"], "scope": SCOPE, "aud": self.sa["token_uri"],
+        assertion = jwt.encode({"iss": self.sa["client_email"], "scope": self.scope, "aud": self.sa["token_uri"],
                                 "iat": now, "exp": now + 3600}, self.sa["private_key"], algorithm="RS256")
         r = self.http.post(self.sa["token_uri"], data={"grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer", "assertion": assertion})
         r.raise_for_status()
@@ -109,6 +112,22 @@ class Drive:
             text = f"[{mime}: binary file, {meta.get('name')}; not rendered]"
         return meta, text[:20000]
 
+    def create(self, folder_id: str, name: str, content: str, mime: str = "text/plain") -> dict:
+        """Create a text file inside `folder_id`. Writes are fenced to the folder,
+        exactly like reads: the proxy governs the call, Drive stores it here."""
+        meta = {"name": name, "parents": [folder_id]}
+        b = "aggrete-boundary"
+        body = (f"--{b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n"
+                + json.dumps(meta) + f"\r\n--{b}\r\nContent-Type: {mime}\r\n\r\n"
+                + content + f"\r\n--{b}--")
+        r = self.http.post("https://www.googleapis.com/upload/drive/v3/files",
+                           params={"uploadType": "multipart", "fields": "id,name,webViewLink"},
+                           content=body.encode("utf-8"),
+                           headers={"Authorization": f"Bearer {self.token()}",
+                                    "Content-Type": f"multipart/related; boundary={b}"})
+        r.raise_for_status()
+        return r.json()
+
 
 def build(drive: Drive, root_name: str) -> MCPServer:
     server = MCPServer("drive")
@@ -124,7 +143,7 @@ def build(drive: Drive, root_name: str) -> MCPServer:
 
     @server.tool(name="folders", description="List the Google Drive folders you can search here. Call this first when asked about documents, files or anything in Google Drive.")
     def folders_tool() -> str:
-        return json.dumps({"drive_folders": [{"name": f["name"], "search_tool": f"search_{slug(f['name'])}", "read_tool": f"read_{slug(f['name'])}"} for f in folders]})
+        return json.dumps({"drive_folders": [dict({"name": f["name"], "search_tool": f"search_{slug(f['name'])}", "read_tool": f"read_{slug(f['name'])}"}, **({"create_tool": f"create_{slug(f['name'])}"} if drive.writable else {})) for f in folders]})
 
     for f in folders:
         s = slug(f["name"]); fid = f["id"]; label = f["name"]
@@ -147,6 +166,15 @@ def build(drive: Drive, root_name: str) -> MCPServer:
         rdesc = f"Read a Google Drive document from the '{label}' folder (Docs, Sheets and Slides come back as text)."
         server.tool(name=f"search_{s}", description=sdesc)(search)
         server.tool(name=f"read_{s}", description=rdesc)(read)
+        if drive.writable:
+            def make_create(fid=fid, label=label):
+                def create(name: str, content: str) -> str:
+                    made = drive.create(fid, name, content)
+                    return json.dumps({"folder": label, "created": made.get("name"),
+                                       "id": made.get("id"), "link": made.get("webViewLink")})
+                return create
+            cdesc = f"Create a text document in the '{label}' Google Drive folder. Provide a file name and its content."
+            server.tool(name=f"create_{s}", description=cdesc)(make_create())
     return server
 
 
@@ -155,8 +183,9 @@ def main() -> None:
     ap.add_argument("--credentials", required=True, help="service-account JSON key")
     ap.add_argument("--root", default="Aggrete", help="name of the shared root folder; its subfolders become tools")
     ap.add_argument("--list", action="store_true", help="print the tools that would be exposed and exit")
+    ap.add_argument("--allow-write", action="store_true", help="expose create tools (governed as writes/egress by the proxy)")
     a = ap.parse_args()
-    drive = Drive(a.credentials)
+    drive = Drive(a.credentials, writable=a.allow_write)
     if a.list:
         root = drive.folder_by_name(a.root)
         print("root:", root["name"] if root else None, root["id"] if root else "")

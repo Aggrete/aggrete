@@ -217,7 +217,7 @@ def verify(coc: dict) -> list[str]:
             for _p in engine.pack_meta:        # a rule's tests validate regardless of its pack's default state
                 engine.set_pack(_p["id"], True)
             for step in t["sequence"]:
-                if not engine.pre_call(user, step["domain"]).allow:
+                if not engine.pre_call(user, step["domain"], is_write=step.get("write", False)).allow:
                     outcome = "deny"; break
                 post = engine.post_call(user, step["domain"], [f"p:{user}" if x == "p:self" else x for x in step.get("entities", [])])
                 if not post.allow:

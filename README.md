@@ -43,6 +43,14 @@ Or clone this repo to get the demo, sample policy and Helm chart.
 - Holds the upstream credentials itself and never forwards the caller's token to
   an upstream (confused-deputy safe).
 
+**Governing writes (egress).** A tool that acts on the world (create, update,
+upload, post, send, share) is classified as a write and governed as egress: any
+write after a session has read untrusted content is refused (the prompt-injection
+shield), and a rule can target writes only with `applies: write`. This is generic
+across connectors, not Drive-specific. The Google Drive connector exposes governed
+`create_<folder>` tools with `--allow-write`; writes are fenced to the folder like
+reads. Classify your own connectors' write tools with `write_tools:` in the config.
+
 See [`ROADMAP.md`](ROADMAP.md) for what is shipped, in progress, and planned,
 with the community requests behind each item.
 

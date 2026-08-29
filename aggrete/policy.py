@@ -89,6 +89,17 @@ def in_scope(e: dict, user: str, now: float | None = None) -> bool:
     return True
 
 
+def applies_to(e: dict, is_write: bool) -> bool:
+    """A rule block may target only writes (`applies: write`) or only reads
+    (`applies: read`); by default it applies to both. (`on` is a YAML boolean.)"""
+    a = e.get("applies")
+    if a == "write":
+        return is_write
+    if a == "read":
+        return not is_write
+    return True
+
+
 class Engine:
     """Evaluates Layer 3 (this call) and Layer 4 (everything so far)."""
 
@@ -161,7 +172,7 @@ class Engine:
 
     # ---------- before the upstream call ----------
 
-    def pre_call(self, user: str, domain: str) -> Decision:
+    def pre_call(self, user: str, domain: str, is_write: bool = False) -> Decision:
         """Deny before fetching where we already know enough to decide.
 
         This is the difference between blocking a leak and merely logging one:
@@ -172,8 +183,10 @@ class Engine:
                 continue
             for e in rule.blocks("flow"):
                 # Prompt-injection shield: once a session has read untrusted
-                # content, it may not reach an egress-capable domain.
-                if domain not in e.get("egress_domains", []) or not in_scope(e, user):
+                # content, it may not reach an egress-capable domain. Any write
+                # is egress by default.
+                is_egress = domain in e.get("egress_domains", []) or (is_write and e.get("egress_on_write", True))
+                if not is_egress or not in_scope(e, user):
                     continue
                 if e.get("action", "deny") != "deny":
                     continue
@@ -183,12 +196,12 @@ class Engine:
                         return Decision(allow=True, rule_id=rule.id, granted_purpose=purpose)
                     return self._deny(rule, {"egress": domain, "tainted_by": tainted})
             for e in rule.blocks("domain_block"):
-                if domain in e["domains"] and e.get("action", "deny") == "deny" and in_scope(e, user):
+                if domain in e["domains"] and e.get("action", "deny") == "deny" and in_scope(e, user) and applies_to(e, is_write):
                     return self._deny(rule, {"domain": domain})
 
             for e in rule.blocks("wall"):
                 # Embargoes, investigation walls, privilege: who may reach a domain, and until when.
-                if domain not in e["domains"] or not in_scope(e, user):
+                if domain not in e["domains"] or not in_scope(e, user) or not applies_to(e, is_write):
                     continue
                 if e.get("action", "deny") != "deny":
                     continue
