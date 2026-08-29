@@ -310,7 +310,14 @@ async def main() -> None:
     ap.add_argument("--transport", choices=["stdio", "streamable-http"], default="stdio")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8080)
+    ap.add_argument("--demo", action="store_true",
+                    help="run a self-contained four-question walkthrough and exit (no config or auth)")
     args = ap.parse_args()
+
+    if args.demo:
+        from ._demo import run
+        run()
+        return
 
     cfg = yaml.safe_load(Path(args.config).read_text())
     root = Path(args.config).parent
@@ -323,9 +330,14 @@ async def main() -> None:
     icons = None
     if brand.get("icon_url"):
         icons = [types.Icon(src=brand["icon_url"], mime_type=brand.get("icon_mime", "image/svg+xml"))]
+    try:
+        from importlib.metadata import version as _pkg_version
+        _ver = _pkg_version("aggrete")
+    except Exception:
+        _ver = "0"
     server = Server(
         "aggrete",
-        version="0.1.0",
+        version=_ver,
         title=brand.get("title", "Aggrete"),
         website_url=brand.get("website_url", "https://aggrete.com"),
         icons=icons,
