@@ -1,8 +1,8 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
-  "name": "io.github.cjohannsen81/aggrete",
+  "name": "io.github.aggrete/aggrete",
   "description": "An MCP proxy that enforces your code of conduct across connectors. Remembers what each user has seen and refuses the query that completes a forbidden picture, before it is fetched.",
-  "repository": { "url": "https://github.com/cjohannsen81/aggrete", "source": "github" },
+  "repository": { "url": "https://github.com/aggrete/aggrete", "source": "github" },
   "version": "0.1.0",
   "websiteUrl": "https://aggrete.com",
   "packages": [
@@ -18,7 +18,7 @@
     },
     {
       "registryType": "oci",
-      "identifier": "ghcr.io/cjohannsen81/aggrete",
+      "identifier": "ghcr.io/aggrete/aggrete",
       "version": "0.1.0",
       "transport": { "type": "streamable-http", "url": "http://localhost:8080/mcp" }
     }

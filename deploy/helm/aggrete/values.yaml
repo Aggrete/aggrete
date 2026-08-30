@@ -1,5 +1,5 @@
 image:
-  repository: ghcr.io/cjohannsen81/aggrete
+  repository: ghcr.io/aggrete/aggrete
   tag: ""            # defaults to appVersion
   pullPolicy: IfNotPresent
 replicaCount: 2

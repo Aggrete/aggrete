@@ -2,7 +2,7 @@
 
 [![PyPI version](https://img.shields.io/pypi/v/aggrete)](https://pypi.org/project/aggrete/)
 [![Python versions](https://img.shields.io/pypi/pyversions/aggrete)](https://pypi.org/project/aggrete/)
-[![License](https://img.shields.io/pypi/l/aggrete)](https://github.com/cjohannsen81/aggrete/blob/main/LICENSE)
+[![License](https://img.shields.io/pypi/l/aggrete)](https://github.com/aggrete/aggrete/blob/main/LICENSE)
 
 <p align="center"><img src="docs/demo.gif" alt="Aggrete refuses the fourth question before the upstream is contacted" width="720"></p>
 
@@ -31,7 +31,7 @@ Or clone this repo to get the demo, sample policy and Helm chart.
 
 ## What the proxy does (0.2)
 
-- **Try it in one command:** `aggrete --demo` (or `docker run --rm ghcr.io/cjohannsen81/aggrete --demo`) runs the four-question walkthrough with no config, auth, or network.
+- **Try it in one command:** `aggrete --demo` (or `docker run --rm ghcr.io/aggrete/aggrete --demo`) runs the four-question walkthrough with no config, auth, or network.
 - Refuses forbidden calls **before** the upstream is contacted, using a YAML
   policy and per-user memory that accumulates across calls and sessions.
 - **Tamper-evident audit**: every decision is one hash-chained JSON line. Verify
@@ -243,7 +243,7 @@ inspects JSON tools/call results for post-call recording.
 | Who | How |
 |---|---|
 | One developer | `uvx aggrete --config proxy.config.yaml` (PyPI) or the `.mcp.json` in this repo |
-| A team | `docker run ghcr.io/cjohannsen81/aggrete` with `/etc/aggrete` mounted, or `helm install aggrete deploy/helm/aggrete` (bundled Redis, JWT auth, Ingress) |
+| A team | `docker run ghcr.io/aggrete/aggrete` with `/etc/aggrete` mounted, or `helm install aggrete deploy/helm/aggrete` (bundled Redis, JWT auth, Ingress) |
 | A company | Helm/Docker behind your IdP, then make `https://aggrete.<corp>/mcp` the *only* MCP server your assistant policies allow (Claude Code managed settings, Claude Enterprise connectors, Copilot/Cursor org policies), with connectors network-restricted to the Aggrete hosts |
 | Existing gateway | `aggrete.plugin` (above) |
 

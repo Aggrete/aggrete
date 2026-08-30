@@ -13,7 +13,7 @@ RUN mkdir -p /state
 FROM cgr.dev/chainguard/python:latest
 LABEL org.opencontainers.image.title="aggrete" \
       org.opencontainers.image.description="An MCP proxy that enforces your code of conduct across connectors." \
-      org.opencontainers.image.source="https://github.com/cjohannsen81/aggrete" \
+      org.opencontainers.image.source="https://github.com/aggrete/aggrete" \
       org.opencontainers.image.url="https://aggrete.com"
 COPY --from=build /venv /venv
 COPY --from=build --chown=65532:65532 /state /var/lib/aggrete

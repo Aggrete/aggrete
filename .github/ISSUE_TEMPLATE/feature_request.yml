@@ -7,7 +7,7 @@ body:
     attributes:
       value: |
         Thanks for helping shape Aggrete. Feature priorities come straight from requests like this one.
-        Skim the [roadmap](https://github.com/cjohannsen81/aggrete/blob/main/ROADMAP.md) first in case it is already planned.
+        Skim the [roadmap](https://github.com/aggrete/aggrete/blob/main/ROADMAP.md) first in case it is already planned.
   - type: textarea
     id: problem
     attributes:

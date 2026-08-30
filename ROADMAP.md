@@ -148,4 +148,4 @@ These already work in the open-source proxy today.
   *Under the hood:* central server registry / shadow-MCP governance
   ([Cloudflare](https://developers.cloudflare.com/agents/model-context-protocol/governance)).
 
-Requests and rationale welcome in [issues](https://github.com/cjohannsen81/aggrete/issues).
+Requests and rationale welcome in [issues](https://github.com/aggrete/aggrete/issues).

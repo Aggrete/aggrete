@@ -14,7 +14,7 @@ Both steps are done once, in a browser, by a maintainer.
 1. **PyPI Trusted Publisher.** On
    <https://pypi.org/manage/project/aggrete/settings/publishing/>, add a GitHub
    publisher:
-   - Owner: `cjohannsen81`
+   - Owner: `aggrete`
    - Repository: `aggrete`
    - Workflow name: `release.yml`
    - Environment name: `pypi`
@@ -37,7 +37,7 @@ time; PyPI trusts it because of the publisher configured above.
    - builds the sdist and wheel, runs `twine check`, and checks that the tag
      matches the `pyproject.toml` version,
    - publishes to PyPI via Trusted Publishing,
-   - builds and pushes `ghcr.io/cjohannsen81/aggrete:<tag>` and `:latest`.
+   - builds and pushes `ghcr.io/aggrete/aggrete:<tag>` and `:latest`.
 5. Confirm from a clean environment:
 
    ```bash

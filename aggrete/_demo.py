@@ -104,5 +104,5 @@ def run() -> None:
     print()
     if denied:
         print("  " + c("90", "The forbidden combination was blocked before any data was fetched."))
-    print("  " + c("90", "Run it for real:  https://github.com/cjohannsen81/aggrete"))
+    print("  " + c("90", "Run it for real:  https://github.com/aggrete/aggrete"))
     print()
