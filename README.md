@@ -286,6 +286,49 @@ prints the tools that will be exposed. If the root is not shared yet the
 connector still starts and exposes a single `status` tool that says what is
 missing, so the proxy never fails to boot because of Drive.
 
+## Building your own connector
+
+Drive is the reference; the pattern is general. A connector is just an MCP
+server, and the proxy governs any MCP server, so putting a new system behind the
+proxy is: expose read tools, name write tools with a write verb, and map the
+tools to a policy domain.
+
+`aggrete/connectors/base.py` removes the boilerplate:
+
+```python
+from aggrete.connectors.base import Connector
+
+c = Connector("crm")
+
+@c.read("search_accounts", "Search CRM accounts by name.")
+def search(query: str) -> str:
+    return my_crm.search(query)          # a JSON string
+
+@c.write("create_note", "Add a note to an account.")
+def create_note(account_id: str, text: str) -> str:
+    return my_crm.add_note(account_id, text)
+
+if __name__ == "__main__":
+    c.run()
+```
+
+```yaml
+upstreams:
+  crm: {command: python3, args: [my_crm_connector.py]}
+domains:
+  "crm__*": crm-accounts
+```
+
+`c.write(...)` refuses a tool name with no write verb, because a mis-named write
+would slip past egress governance. Full guide with the folder-fencing pattern
+and a copy-paste template: [docs/CONNECTORS.md](docs/CONNECTORS.md) and
+`examples/connectors/knowledgebase_connector.py`.
+
+For teams that would rather not build and maintain their own, **Aggrete for
+teams** is where supported, certified connectors live: maintained and covered by
+support, with Drive shipping and Slack, GitHub, Jira, Salesforce and Workday on
+the roadmap. The proxy and this SDK stay Apache-2.0.
+
 ## Starting from the document you already have
 
 `aggrete/ingest.py` turns a code-of-conduct document into a draft `coc.yaml`:
