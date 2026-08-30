@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 88.000 88.000" width="88.000" height="88.000" role="img" aria-label="Aggrete">
-  <rect x="0.000" y="0.000" width="40.000" height="40.000" rx="7.000" fill="#0E1216"/>
-  <rect x="48.000" y="0.000" width="40.000" height="40.000" rx="7.000" fill="#0E1216"/>
-  <rect x="0.000" y="48.000" width="40.000" height="40.000" rx="7.000" fill="#0E1216"/>
-  <rect x="50.500" y="50.500" width="35.000" height="35.000" rx="4.500" fill="none" stroke="#C2410C" stroke-width="5.000"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100" role="img" aria-label="Aggrete">
+  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8A6BFF"/><stop offset="1" stop-color="#4E8CFF"/></linearGradient></defs>
+  <rect width="100" height="100" rx="24" fill="url(#g)"/>
+  <polygon points="50,20 76,34 76,66 50,80 24,66 24,34" fill="none" stroke="#ffffff" stroke-width="6" stroke-linejoin="round"/>
+  <path d="M39.5 50.5 l7.5 7.5 14.5 -16" fill="none" stroke="#ffffff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

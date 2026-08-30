@@ -1,3 +1,5 @@
+<p align="center"><img src="brand-icon.svg" alt="Aggrete" width="88"></p>
+
 # Aggrete
 
 [![PyPI version](https://img.shields.io/pypi/v/aggrete)](https://pypi.org/project/aggrete/)
