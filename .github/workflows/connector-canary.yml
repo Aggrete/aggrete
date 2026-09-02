@@ -1,0 +1,78 @@
+name: connector-canary
+
+# Runs the bundled connectors against their live provider APIs on a schedule to
+# catch API drift early. Credentials come from repo secrets/vars; a connector
+# with no credentials set is skipped, so this only goes red when a connector you
+# have configured actually breaks. On red it opens (or updates) an alert issue;
+# a human ships the fix and the release workflow publishes a new version.
+on:
+  schedule:
+    - cron: "17 6 * * *"   # daily, 06:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write   # to commit refreshed last_verified stamps
+  issues: write     # to open the drift alert
+
+jobs:
+  canary:
+    name: Check connectors against live APIs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e .
+
+      - name: Run connector canary
+        id: canary
+        env:
+          SLACK_TOKEN: ${{ secrets.CANARY_SLACK_TOKEN }}
+          SLACK_CHANNELS: ${{ vars.CANARY_SLACK_CHANNELS }}
+          GH_CANARY_TOKEN: ${{ secrets.CANARY_GITHUB_TOKEN }}
+          GITHUB_REPOS: ${{ vars.CANARY_GITHUB_REPOS }}
+          DRIVE_SA_JSON: ${{ secrets.CANARY_DRIVE_SA_JSON }}
+          DRIVE_ROOT: ${{ vars.CANARY_DRIVE_ROOT }}
+          JIRA_SITE: ${{ vars.CANARY_JIRA_SITE }}
+          JIRA_EMAIL: ${{ vars.CANARY_JIRA_EMAIL }}
+          JIRA_TOKEN: ${{ secrets.CANARY_JIRA_TOKEN }}
+          JIRA_PROJECTS: ${{ vars.CANARY_JIRA_PROJECTS }}
+          SF_INSTANCE: ${{ vars.CANARY_SF_INSTANCE }}
+          SF_TOKEN: ${{ secrets.CANARY_SF_TOKEN }}
+          SF_OBJECTS: ${{ vars.CANARY_SF_OBJECTS }}
+          NOTION_TOKEN: ${{ secrets.CANARY_NOTION_TOKEN }}
+          NOTION_DATABASES: ${{ vars.CANARY_NOTION_DATABASES }}
+        run: python scripts/connector_canary.py --update-manifest | tee canary.txt
+
+      - name: Commit refreshed last_verified
+        if: always()
+        run: |
+          if ! git diff --quiet -- aggrete/connectors/connectors.json; then
+            git config user.name "connector-canary"
+            git config user.email "actions@users.noreply.github.com"
+            git add aggrete/connectors/connectors.json
+            git commit -m "canary: refresh connector last_verified"
+            git push
+          fi
+
+      - name: Open an alert issue on drift
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let body = 'A bundled connector failed its live canary check. A provider API likely changed.';
+            try { body = '```\n' + fs.readFileSync('canary.txt','utf8') + '\n```'; } catch (e) {}
+            const title = 'Connector canary: drift detected';
+            const q = `repo:${context.repo.owner}/${context.repo.repo} is:issue is:open in:title "${title}"`;
+            const found = await github.rest.search.issuesAndPullRequests({ q });
+            if (found.data.total_count > 0) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner, repo: context.repo.repo,
+                issue_number: found.data.items[0].number, body });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner, repo: context.repo.repo,
+                title, body, labels: ['connector-drift'] });
+            }
