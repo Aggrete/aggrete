@@ -28,6 +28,9 @@ import httpx2 as httpx
 import jwt
 from mcp.server.mcpserver import MCPServer
 
+__version__ = "0.1.0"
+TARGET_API = "v3"
+
 API = "https://www.googleapis.com/drive/v3"
 READONLY_SCOPE = "https://www.googleapis.com/auth/drive.readonly"
 WRITE_SCOPE = "https://www.googleapis.com/auth/drive"

@@ -87,12 +87,30 @@ Copy its shape when a connector needs per-domain fencing.
 - [ ] Every new rule that touches the connector has an allow test and a
       deny/alert test in `coc.yaml`.
 
-## Community vs. supported connectors
+## Bundled connectors
 
-This SDK, the guide, and the Drive reference are Apache-2.0: build any connector
-you need, and the proxy governs it the same way it governs the built-ins.
+These ship in the package (Apache-2.0) and are governed exactly like a connector
+you write yourself. Each is a small MCP server over raw REST, no provider SDK.
+Reads are fenced to a boundary (a channel, repo, folder, project, object or
+database) and mapped to a policy domain; writes are named with a write verb so
+the proxy governs them as egress. Run any of them over stdio from
+`proxy.config.yaml`.
 
-Aggrete for teams is where **fully supported, certified connectors** live:
-maintained, tested against provider API changes, and covered by support, so a
-team does not build and keep running its own. Google Drive is the first; Slack,
-GitHub, Jira, Salesforce and Workday are the roadmap. See https://aggrete.com.
+| Connector | Boundary | Auth | Run |
+| --- | --- | --- | --- |
+| Google Drive | folder | service-account JSON | `python -m aggrete.connectors.drive --credentials sa.json --root Northwind` |
+| Slack | channel | bot token (xoxb-) | `python -m aggrete.connectors.slack --token xoxb-... --channels legal,finance` |
+| GitHub | repository | PAT or app token | `python -m aggrete.connectors.github --token ghp_... --repos org/security,org/product` |
+| Jira | project | email + API token | `python -m aggrete.connectors.jira --site https://co.atlassian.net --email you@co.com --token ... --projects LEGAL,FIN` |
+| Salesforce | object | OAuth token + instance | `python -m aggrete.connectors.salesforce --instance https://co.my.salesforce.com --token ... --objects Lead,Contact` |
+| Notion | database | integration token | `python -m aggrete.connectors.notion --token secret_... --databases <db_id>` |
+
+Pass `--allow-write` to expose the write tool (post, create issue, create
+record, create page); the proxy governs it as egress, refused after an untrusted
+read. Pass `--list` to print the tools a connector would expose without starting
+it. The machine-readable list, with per-connector version and target API, is
+`aggrete/connectors/connectors.json`.
+
+These are reference connectors, maintained best effort. When a provider changes
+its API, the fix ships as a new release. Next on the roadmap: Confluence,
+Microsoft 365, ServiceNow, Box and Zendesk. See https://aggrete.com/#connectors.

@@ -149,3 +149,32 @@ These already work in the open-source proxy today.
   ([Cloudflare](https://developers.cloudflare.com/agents/model-context-protocol/governance)).
 
 Requests and rationale welcome in [issues](https://github.com/aggrete/aggrete/issues).
+
+## Connectors
+
+Any system can go behind the proxy through the connector SDK
+(`aggrete.connectors.base`) and the guide (`docs/CONNECTORS.md`). These are the
+ones that ship in the package, governed exactly like the built-ins.
+
+### Shipped
+
+- **Google Drive** (folder) — the reference connector.
+- **Slack** (channel) — a channel is an information barrier; posting is egress.
+- **GitHub** (repository) — issues, PRs and files; opening an issue is egress.
+- **Jira** (project) — JQL search; creating an issue is egress.
+- **Salesforce** (object) — SOQL search; every record exposes a person, so a
+  bulk export trips an entity_budget rule.
+- **Notion** (database) — page search and read; creating a page is egress.
+
+### Next
+
+- **Confluence** (space) — the Atlassian wiki; shares the Jira auth model.
+- **Microsoft 365** (SharePoint, Teams, Outlook) — over Microsoft Graph. Highest
+  reach, heaviest auth, so it is its own effort.
+- **ServiceNow** (table) — incidents, changes and CMDB tables.
+- **Box** (folder) — files fenced per folder, like the Drive connector.
+- **Zendesk** (group) — support tickets; requesters and agents count as people.
+
+New connectors and API-drift fixes are released as versioned updates. Each
+connector module carries its own `__version__` and `TARGET_API`, surfaced in
+`aggrete/connectors/connectors.json`.
