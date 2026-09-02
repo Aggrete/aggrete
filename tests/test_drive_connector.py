@@ -47,3 +47,16 @@ def test_impersonation_claims(tmp_path):
     deleg = Drive(tmp_path / "sa.json", subject="alice@corp.com")
     c = deleg._claims(1000)
     assert c["sub"] == "alice@corp.com" and c["iss"].startswith("sa@")   # impersonates the user
+
+
+def test_set_subject_switches_and_clears_token(tmp_path):
+    import json as _json
+    from aggrete.connectors.drive import Drive
+    sa = {"client_email": "sa@p.iam", "token_uri": "https://t", "private_key": "x"}
+    (tmp_path / "sa.json").write_text(_json.dumps(sa))
+    d = Drive(tmp_path / "sa.json")
+    d._tok, d._exp = "cached", 9e18            # pretend we hold a token
+    d.set_subject("alice@corp.com")
+    assert d.subject == "alice@corp.com" and d._tok is None   # switching users drops the token
+    assert d._claims(1)["sub"] == "alice@corp.com"
+    d.set_subject("alice@corp.com")            # same user: no-op, no error

@@ -174,6 +174,12 @@ class Proxy:
         session = self.sessions.get(upstream)
         if session is None:
             return self._refuse(f"Unknown upstream {upstream!r}.")
+        # For an upstream that impersonates the caller (e.g. Drive with domain-wide
+        # delegation), forward the caller's identity as a trusted argument. The
+        # proxy sets it, overriding anything the model supplied, so the assistant
+        # can never choose whose permissions it acts under.
+        if self.cfg.get("upstreams", {}).get(upstream, {}).get("impersonate"):
+            args = {**args, "_acting_user": self.user}
         result = await session.call_tool(tool, args)
 
         # --- Layer 3/4, after the fetch ------------------------------------

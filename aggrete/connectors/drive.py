@@ -65,6 +65,13 @@ class Drive:
             c["sub"] = self.subject
         return c
 
+    def set_subject(self, email: str | None) -> None:
+        """Impersonate a different user on the next call. Clears the cached
+        token so a fresh one is minted for that user (domain-wide delegation)."""
+        if email and email != self.subject:
+            self.subject = email
+            self._tok, self._exp = None, 0.0
+
     def token(self) -> str:
         if self._tok and time.time() < self._exp - 60:
             return self._tok
@@ -142,7 +149,7 @@ class Drive:
         return r.json()
 
 
-def build(drive: Drive, root_name: str) -> MCPServer:
+def build(drive: Drive, root_name: str, impersonate: bool = False) -> MCPServer:
     server = MCPServer("drive")
     root = drive.folder_by_name(root_name)
     if not root:
@@ -162,13 +169,17 @@ def build(drive: Drive, root_name: str) -> MCPServer:
         s = slug(f["name"]); fid = f["id"]; label = f["name"]
 
         def make(fid=fid, label=label):
-            def search(query: str = "") -> str:
+            def search(query: str = "", _acting_user: str = "") -> str:
+                if impersonate and _acting_user:
+                    drive.set_subject(_acting_user)
                 return json.dumps({"folder": label, "files": [
                     {"id": x["id"], "name": x["name"], "type": x.get("mimeType"), "modified": x.get("modifiedTime"),
                      "owner_email": (x.get("owners") or [{}])[0].get("emailAddress"),
                      "editor_email": (x.get("lastModifyingUser") or {}).get("emailAddress"), "link": x.get("webViewLink")}
                     for x in drive.search(fid, query)]})
-            def read(file_id: str) -> str:
+            def read(file_id: str, _acting_user: str = "") -> str:
+                if impersonate and _acting_user:
+                    drive.set_subject(_acting_user)
                 meta, text = drive.read(file_id, fid)
                 return json.dumps({"folder": label, "name": meta["name"], "owner_email": (meta.get("owners") or [{}])[0].get("emailAddress"),
                                    "editor_email": (meta.get("lastModifyingUser") or {}).get("emailAddress"), "text": text})
@@ -181,7 +192,9 @@ def build(drive: Drive, root_name: str) -> MCPServer:
         server.tool(name=f"read_{s}", description=rdesc)(read)
         if drive.writable:
             def make_create(fid=fid, label=label):
-                def create(name: str, content: str) -> str:
+                def create(name: str, content: str, _acting_user: str = "") -> str:
+                    if impersonate and _acting_user:
+                        drive.set_subject(_acting_user)
                     made = drive.create(fid, name, content)
                     return json.dumps({"folder": label, "created": made.get("name"),
                                        "id": made.get("id"), "link": made.get("webViewLink")})
@@ -214,7 +227,7 @@ def main() -> None:
         for f in (drive.subfolders(root["id"]) if root else []):
             print(f"  {f['name']!r:32} -> drive__search_{slug(f['name'])}, drive__read_{slug(f['name'])}")
         return
-    asyncio.run(build(drive, a.root).run_stdio_async())
+    asyncio.run(build(drive, a.root, impersonate=a.impersonate).run_stdio_async())
 
 
 if __name__ == "__main__":
