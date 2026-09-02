@@ -9,8 +9,14 @@
       "boundary": "folder",
       "module": "aggrete.connectors.drive",
       "auth": "Service-account key (JSON)",
-      "reads": ["folders", "search_<folder>", "read_<folder>"],
-      "writes": ["create_<folder>"],
+      "reads": [
+        "folders",
+        "search_<folder>",
+        "read_<folder>"
+      ],
+      "writes": [
+        "create_<folder>"
+      ],
       "person": "Document owner and last editor email",
       "run": "python -m aggrete.connectors.drive --credentials sa.json --root Northwind",
       "domains": "\"drive__*_legal_hold\": legal-hold",
@@ -24,8 +30,14 @@
       "boundary": "channel",
       "module": "aggrete.connectors.slack",
       "auth": "Bot token (xoxb-)",
-      "reads": ["channels", "search_<channel>", "read_<channel>"],
-      "writes": ["post_<channel>"],
+      "reads": [
+        "channels",
+        "search_<channel>",
+        "read_<channel>"
+      ],
+      "writes": [
+        "post_<channel>"
+      ],
       "person": "Message author (Slack user id, email when resolvable)",
       "run": "python -m aggrete.connectors.slack --token xoxb-... --channels legal,finance,general",
       "domains": "\"slack__*_legal\": legal-hold",
@@ -39,8 +51,14 @@
       "boundary": "repository",
       "module": "aggrete.connectors.github",
       "auth": "PAT or app token",
-      "reads": ["repos", "search_<repo>", "read_<repo>"],
-      "writes": ["create_issue_<repo>"],
+      "reads": [
+        "repos",
+        "search_<repo>",
+        "read_<repo>"
+      ],
+      "writes": [
+        "create_issue_<repo>"
+      ],
       "person": "Issue, PR and commit author (login, email when exposed)",
       "run": "python -m aggrete.connectors.github --token ghp_... --repos org/security,org/product",
       "domains": "\"github__*_security\": secrets-dlp",
@@ -54,8 +72,14 @@
       "boundary": "project",
       "module": "aggrete.connectors.jira",
       "auth": "Email + API token (Basic)",
-      "reads": ["projects", "search_<project>", "read_<project>"],
-      "writes": ["create_issue_<project>"],
+      "reads": [
+        "projects",
+        "search_<project>",
+        "read_<project>"
+      ],
+      "writes": [
+        "create_issue_<project>"
+      ],
       "person": "Reporter and assignee email (account id fallback)",
       "run": "python -m aggrete.connectors.jira --site https://co.atlassian.net --email you@co.com --token ... --projects LEGAL,FIN",
       "domains": "\"jira__*_legal\": legal-hold",
@@ -69,8 +93,14 @@
       "boundary": "object",
       "module": "aggrete.connectors.salesforce",
       "auth": "OAuth access token + instance URL",
-      "reads": ["objects", "search_<object>", "read_<object>"],
-      "writes": ["create_<object>"],
+      "reads": [
+        "objects",
+        "search_<object>",
+        "read_<object>"
+      ],
+      "writes": [
+        "create_<object>"
+      ],
       "person": "Record email and record owner email",
       "run": "python -m aggrete.connectors.salesforce --instance https://co.my.salesforce.com --token ... --objects Lead,Contact,Opportunity",
       "domains": "\"salesforce__*_lead\": salesforce-leads",
@@ -84,8 +114,14 @@
       "boundary": "database",
       "module": "aggrete.connectors.notion",
       "auth": "Integration token",
-      "reads": ["databases", "search_<database>", "read_<database>"],
-      "writes": ["create_page_<database>"],
+      "reads": [
+        "databases",
+        "search_<database>",
+        "read_<database>"
+      ],
+      "writes": [
+        "create_page_<database>"
+      ],
       "person": "Page creator and last editor email",
       "run": "python -m aggrete.connectors.notion --token secret_... --databases <db_id>,<db_id>",
       "domains": "\"notion__*_hr\": hr-personnel",
@@ -93,10 +129,35 @@
     }
   ],
   "roadmap": [
-    {"id": "confluence", "name": "Confluence", "boundary": "space", "note": "Atlassian wiki, spaces as boundaries; shares the Jira auth model."},
-    {"id": "microsoft365", "name": "Microsoft 365", "boundary": "site / team / mailbox", "note": "SharePoint, Teams and Outlook over Microsoft Graph. Highest reach, heaviest auth."},
-    {"id": "servicenow", "name": "ServiceNow", "boundary": "table", "note": "Incidents, changes and CMDB tables, each mapped to a domain."},
-    {"id": "box", "name": "Box", "boundary": "folder", "note": "Files fenced per folder, like the Drive reference connector."},
-    {"id": "zendesk", "name": "Zendesk", "boundary": "group", "note": "Support tickets fenced per group; requesters and agents count as people."}
+    {
+      "id": "confluence",
+      "name": "Confluence",
+      "boundary": "space",
+      "note": "Atlassian wiki, spaces as boundaries; shares the Jira auth model."
+    },
+    {
+      "id": "microsoft365",
+      "name": "Microsoft 365",
+      "boundary": "site / team / mailbox",
+      "note": "SharePoint, Teams and Outlook over Microsoft Graph. Highest reach, heaviest auth."
+    },
+    {
+      "id": "servicenow",
+      "name": "ServiceNow",
+      "boundary": "table",
+      "note": "Incidents, changes and CMDB tables, each mapped to a domain."
+    },
+    {
+      "id": "box",
+      "name": "Box",
+      "boundary": "folder",
+      "note": "Files fenced per folder, like the Drive reference connector."
+    },
+    {
+      "id": "zendesk",
+      "name": "Zendesk",
+      "boundary": "group",
+      "note": "Support tickets fenced per group; requesters and agents count as people."
+    }
   ]
 }
