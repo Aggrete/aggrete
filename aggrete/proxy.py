@@ -88,15 +88,18 @@ class Proxy:
 
     async def connect(self, stack: contextlib.AsyncExitStack):
         for name, spec in self.cfg["upstreams"].items():
-            if "url" in spec:
-                read, write = await self._connect_http(stack, spec)
-            elif "command" in spec:
-                read, write = await self._connect_stdio(stack, spec)
-            else:
-                raise ValueError(f"upstream {name!r} needs either 'command' or 'url'")
-            session = await stack.enter_async_context(ClientSession(read, write))
-            await session.initialize()
-            self.sessions[name] = session
+            try:
+                if "url" in spec:
+                    read, write = await self._connect_http(stack, spec)
+                elif "command" in spec:
+                    read, write = await self._connect_stdio(stack, spec)
+                else:
+                    raise ValueError(f"upstream {name!r} needs either 'command' or 'url'")
+                session = await stack.enter_async_context(ClientSession(read, write))
+                await session.initialize()
+                self.sessions[name] = session
+            except Exception as e:  # a broken connector must not take the whole proxy down
+                print(f"aggrete: upstream {name!r} failed to connect, skipping it: {e}", file=sys.stderr)
 
     async def _connect_stdio(self, stack, spec):
         command = spec["command"]
@@ -104,8 +107,11 @@ class Proxy:
         # for locally-spawned Python servers without hardcoding paths.
         if command in ("python", "python3"):
             command = sys.executable
+        # Inherit the proxy's environment (certs, PATH, etc.) so a connector runs
+        # the same way it does from the shell, plus any per-upstream overrides.
         params = StdioServerParameters(
-            command=command, args=spec.get("args", []), env=spec.get("env")
+            command=command, args=spec.get("args", []),
+            env={**os.environ, **(spec.get("env") or {})},
         )
         return await stack.enter_async_context(stdio_client(params))
 
