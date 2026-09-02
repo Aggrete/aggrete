@@ -34,3 +34,16 @@ def test_read_refuses_files_outside_the_folder():
 def test_drive_results_yield_people():
     payload = json.dumps({"folder": "Restructuring plan", "files": [{"id": "1", "name": "Q4 plan", "owner_email": "CFO@corp.example", "editor_email": "chro@corp.example"}]})
     assert extract(payload) == ["p:cfo@corp.example"]     # one record, one person (owner preferred); editor is the same record
+
+
+def test_impersonation_claims(tmp_path):
+    import json as _json
+    from aggrete.connectors.drive import Drive
+    sa = {"client_email": "sa@proj.iam.gserviceaccount.com",
+          "token_uri": "https://oauth2.googleapis.com/token", "private_key": "unused-here"}
+    (tmp_path / "sa.json").write_text(_json.dumps(sa))
+    plain = Drive(tmp_path / "sa.json")
+    assert "sub" not in plain._claims(1000)                        # service account acts as itself
+    deleg = Drive(tmp_path / "sa.json", subject="alice@corp.com")
+    c = deleg._claims(1000)
+    assert c["sub"] == "alice@corp.com" and c["iss"].startswith("sa@")   # impersonates the user

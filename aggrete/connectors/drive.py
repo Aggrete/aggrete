@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import re
 import time
 from pathlib import Path
@@ -28,7 +29,7 @@ import httpx2 as httpx
 import jwt
 from mcp.server.mcpserver import MCPServer
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 TARGET_API = "v3"
 
 API = "https://www.googleapis.com/drive/v3"
@@ -47,19 +48,28 @@ def slug(name: str) -> str:
 class Drive:
     """Minimal Drive v3 client on a service account. No Google SDK: PyJWT + httpx."""
 
-    def __init__(self, credentials: str | Path, writable: bool = False):
+    def __init__(self, credentials: str | Path, writable: bool = False, subject: str | None = None):
         self.sa = json.loads(Path(credentials).read_text())
         self.scope = WRITE_SCOPE if writable else READONLY_SCOPE
         self.writable = writable
+        # When set, the service account impersonates this user via domain-wide
+        # delegation, so Drive enforces that person's own file permissions.
+        self.subject = subject
         self._tok, self._exp = None, 0.0
         self.http = httpx.Client(timeout=30)
+
+    def _claims(self, now: int) -> dict:
+        c = {"iss": self.sa["client_email"], "scope": self.scope, "aud": self.sa["token_uri"],
+             "iat": now, "exp": now + 3600}
+        if self.subject:
+            c["sub"] = self.subject
+        return c
 
     def token(self) -> str:
         if self._tok and time.time() < self._exp - 60:
             return self._tok
         now = int(time.time())
-        assertion = jwt.encode({"iss": self.sa["client_email"], "scope": self.scope, "aud": self.sa["token_uri"],
-                                "iat": now, "exp": now + 3600}, self.sa["private_key"], algorithm="RS256")
+        assertion = jwt.encode(self._claims(now), self.sa["private_key"], algorithm="RS256")
         r = self.http.post(self.sa["token_uri"], data={"grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer", "assertion": assertion})
         r.raise_for_status()
         self._tok, self._exp = r.json()["access_token"], time.time() + r.json().get("expires_in", 3600)
@@ -187,8 +197,17 @@ def main() -> None:
     ap.add_argument("--root", default="Aggrete", help="name of the shared root folder; its subfolders become tools")
     ap.add_argument("--list", action="store_true", help="print the tools that would be exposed and exit")
     ap.add_argument("--allow-write", action="store_true", help="expose create tools (governed as writes/egress by the proxy)")
+    ap.add_argument("--impersonate", action="store_true",
+                    help="act as the calling user via domain-wide delegation, so Drive enforces that user's own permissions")
+    ap.add_argument("--subject", default=None,
+                    help="user email to impersonate; defaults to $AGGRETE_ACTING_USER (set per user by the proxy)")
     a = ap.parse_args()
-    drive = Drive(a.credentials, writable=a.allow_write)
+    subject = None
+    if a.impersonate:
+        subject = a.subject or os.environ.get("AGGRETE_ACTING_USER")
+        if not subject:
+            ap.error("--impersonate needs --subject EMAIL or $AGGRETE_ACTING_USER (the calling user)")
+    drive = Drive(a.credentials, writable=a.allow_write, subject=subject)
     if a.list:
         root = drive.folder_by_name(a.root)
         print("root:", root["name"] if root else None, root["id"] if root else "")

@@ -5,7 +5,7 @@
       "id": "drive",
       "name": "Google Drive",
       "status": "stable",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "boundary": "folder",
       "module": "aggrete.connectors.drive",
       "auth": "Service-account key (JSON)",
@@ -20,7 +20,7 @@
       "person": "Document owner and last editor email",
       "run": "python -m aggrete.connectors.drive --credentials sa.json --root Northwind",
       "domains": "\"drive__*_legal_hold\": legal-hold",
-      "detail": "The reference connector, shipping since launch. Each subfolder of the shared root becomes its own boundary with search and read tools, so restructuring, legal hold and team documents each map to a policy domain. Results carry the owner and last-editor email, which is what the policy counts as people. Read only unless you pass --allow-write, which adds a folder-fenced create tool governed as egress."
+      "detail": "The reference connector, shipping since launch. Each subfolder of the shared root becomes its own boundary with search and read tools, so restructuring, legal hold and team documents each map to a policy domain. Results carry the owner and last-editor email, which is what the policy counts as people. Read only unless you pass --allow-write, which adds a folder-fenced create tool governed as egress. With domain-wide delegation it impersonates the calling user, so Drive enforces that person's own permissions."
     },
     {
       "id": "slack",
