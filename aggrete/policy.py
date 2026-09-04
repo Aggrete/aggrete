@@ -13,6 +13,17 @@ import yaml
 
 from .accumulator import MemoryStore, Store, parse_window
 
+# Types the engine knows how to evaluate. Unknown values fail at load time.
+VALID_ENFORCE_TYPES = frozenset({
+    "domain_join",
+    "self_comparison",
+    "wall",
+    "min_group",
+    "entity_budget",
+    "flow",
+    "domain_block",
+})
+
 
 @dataclass
 class Decision:
@@ -48,6 +59,13 @@ class Rule:
         self.enforce = []
         for e in raw.get("enforce", []):
             e = dict(e)
+            kind = e.get("type")
+            if kind not in VALID_ENFORCE_TYPES:
+                valid = ", ".join(sorted(VALID_ENFORCE_TYPES))
+                raise ValueError(
+                    f"rule {self.id}: unknown enforce type {kind!r}; "
+                    f"valid types: {valid}"
+                )
             e["window_s"] = parse_window(e.get("window", defaults.get("window", "24h")))
             self.enforce.append(e)
 
@@ -82,7 +100,7 @@ def in_scope(e: dict, user: str, now: float | None = None) -> bool:
     if e.get("blocked_users") and u not in {x.strip().lower() for x in e["blocked_users"]}:
         return False
     since, until = _ts(e.get("since")), _ts(e.get("until"))
-    if since and now < since:
+    if since and since > now:
         return False
     if until and now >= until:
         return False
@@ -272,7 +290,7 @@ class Engine:
                 if e["domain"] != domain or not in_scope(e, user):
                     continue
                 n = len(set(entities))
-                if 0 < n < int(e.get("k", 10)):
+                if n > 0 and int(e.get("k", 10)) > n:
                     hit = {"rule_id": rule.id, "domain": domain, "people": n, "k": int(e.get("k", 10))}
                     if e.get("action", "alert") == "deny" and not self.store.granted(user, rule.id):
                         return self._deny(rule, hit)
@@ -307,7 +325,7 @@ class Engine:
             for e in rule.blocks("domain_join"):
                 if domain not in e["domains"] or not in_scope(e, user):
                     continue
-                if not set(e["domains"]) <= self.store.domains(user):
+                if not set(e["domains"]).issubset(self.store.domains(user)):
                     continue
                 overlap = set.intersection(*[self.store.entities(user, d) for d in e["domains"]])
                 if e.get("require_entity_overlap", True) and not overlap:
