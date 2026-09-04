@@ -333,7 +333,14 @@ async def main() -> None:
     ap.add_argument("--port", type=int, default=8080)
     ap.add_argument("--demo", action="store_true",
                     help="run a self-contained four-question walkthrough and exit (no config or auth)")
+    ap.add_argument("--version", action="store_true",
+                    help="print package version and exit")
     args = ap.parse_args()
+
+    if args.version:
+        from importlib.metadata import version
+        print(f"aggrete {version('aggrete')}")
+        return
 
     if args.demo:
         from ._demo import run
