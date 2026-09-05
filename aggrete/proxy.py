@@ -39,9 +39,13 @@ from .auth import build_verifier, identity_for, unexpired
 from .entities import extract
 from .policy import Engine
 from .audit import Audit
-from .redact import rules_from_config, redact
+from .redact import rules_from_config, redact, BUILTIN as REDACT_BUILTIN
 from .accumulator import RedisStore
 from . import integrity, ratelimit
+
+# Inbound scan default: credential-shaped patterns only, so a legitimate email or
+# id in an argument is not mistaken for a secret. Override with `scan_inbound:`.
+INBOUND_DEFAULT = ["aws_key", "api_key", "bearer"]
 
 SEP = "__"
 # Tools that act on the world (write / egress). Override with `write_tools:` in config.
@@ -84,6 +88,11 @@ class Proxy:
         # Per-user rate limit, sharing Redis with the accumulator when present.
         redis_client = engine.store.r if isinstance(engine.store, RedisStore) else None
         self.rate_limiter = ratelimit.from_config(config.get("rate_limit"), redis_client)
+        # Inbound secret scanning of tool arguments.
+        sc = config.get("scan_inbound")
+        names = (INBOUND_DEFAULT if sc is True else list(sc)) if sc else []
+        self.inbound_rules = [(n, REDACT_BUILTIN[n]) for n in names if n in REDACT_BUILTIN]
+        self.inbound_action = config.get("scan_inbound_action", "block")
 
     @property
     def user(self) -> str:
@@ -289,6 +298,21 @@ class Proxy:
                 "description carries hidden instructions. Re-pin it deliberately if expected.")
 
         is_write = self._is_write(name)
+
+        # Inbound secret scanning: a credential in the arguments never goes upstream.
+        if self.inbound_rules and args:
+            args, hits = self._scan_inbound(args)
+            if hits:
+                blocked = self.inbound_action == "block"
+                self.audit.emit(user=self.user, tool=name, domain=domain, stage="pre", write=is_write,
+                                decision="deny" if blocked else "allow", rule="inbound-secret",
+                                evidence={"hits": hits})
+                if blocked:
+                    return self._refuse(
+                        f"Blocked: the arguments to {name} contain what looks like a secret "
+                        f"({', '.join(hits)}). Aggrete does not forward credentials into tools. "
+                        "Remove it and retry.")
+
         # --- Layer 3/4, before the fetch -----------------------------------
         pre = self.engine.pre_call(self.user, domain, is_write=is_write)
         if not pre.allow:
@@ -327,6 +351,26 @@ class Proxy:
             # The data left the upstream, but it does not reach the model.
             return self._refuse(post.explain())
         return result
+
+    def _scan_inbound(self, args):
+        """Walk argument values and mask secret-shaped strings, returning
+        (args, hits). In block mode the caller refuses on any hit; in redact mode
+        these masked arguments are what goes upstream."""
+        hits: dict[str, int] = {}
+
+        def walk(v):
+            if isinstance(v, str):
+                masked, counts = redact(v, self.inbound_rules)
+                for k, n in counts.items():
+                    hits[k] = hits.get(k, 0) + n
+                return masked
+            if isinstance(v, dict):
+                return {k: walk(x) for k, x in v.items()}
+            if isinstance(v, list):
+                return [walk(x) for x in v]
+            return v
+
+        return walk(args), hits
 
     def _redact_result(self, result: types.CallToolResult):
         """Mask secrets/PII in text content before it reaches the model.

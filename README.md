@@ -57,6 +57,9 @@ Or clone this repo to get the demo, sample policy and Helm chart.
   `tool_integrity:`. Deterministic, no model in the path.
 - **Rate limiting:** a per-user ceiling on tool calls per window (`rate_limit:`),
   shared across replicas via Redis. A denial-of-wallet and abuse control.
+- **Inbound secret scanning:** scans tool arguments for credential-shaped strings
+  and blocks (or masks) them before they reach an upstream (`scan_inbound:`), so a
+  leaked key never leaves through a tool call.
 
 **Governing writes (egress).** A tool that acts on the world (create, update,
 upload, post, send, share) is classified as a write and governed as egress: any

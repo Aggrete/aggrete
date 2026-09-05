@@ -113,6 +113,13 @@ rate_limit:
   max_calls: 120
   window: 1m
 
+# Inbound secret scanning: scan tool arguments for credential-shaped strings
+# before they are forwarded upstream. `true` uses the credential set
+# (aws_key, api_key, bearer); or list rule names. `scan_inbound_action` is
+# `block` (refuse the call, the default) or `redact` (mask, then forward).
+scan_inbound: true
+scan_inbound_action: block
+
 upstreams:
   hr:
     command: python3
