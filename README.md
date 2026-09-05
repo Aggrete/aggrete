@@ -23,6 +23,10 @@ fires, because no single question was sensitive. This proxy is the missing layer
 
 ```bash
 pip install aggrete            # published on PyPI
+# or with uv:
+uv tool install aggrete        # installs the aggrete CLI
+uvx aggrete --demo             # or run it without installing
+
 aggrete --config proxy.config.yaml
 ```
 
