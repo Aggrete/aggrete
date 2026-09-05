@@ -40,7 +40,8 @@ from .entities import extract
 from .policy import Engine
 from .audit import Audit
 from .redact import rules_from_config, redact
-from . import integrity
+from .accumulator import RedisStore
+from . import integrity, ratelimit
 
 SEP = "__"
 # Tools that act on the world (write / egress). Override with `write_tools:` in config.
@@ -80,6 +81,9 @@ class Proxy:
         self.pins = integrity.PinStore(self.integrity_cfg.get("pins")) if self.integrity_cfg else None
         self.tool_flags: dict[str, dict | None] = {}
         self._integrity_audited: set[str] = set()
+        # Per-user rate limit, sharing Redis with the accumulator when present.
+        redis_client = engine.store.r if isinstance(engine.store, RedisStore) else None
+        self.rate_limiter = ratelimit.from_config(config.get("rate_limit"), redis_client)
 
     @property
     def user(self) -> str:
@@ -258,6 +262,17 @@ class Proxy:
                 return self._run_check(args)
             if name == SCENARIOS_TOOL:
                 return self._run_scenarios()
+
+        if self.rate_limiter is not None:
+            ok, count = self.rate_limiter.allow(self.user)
+            if not ok:
+                self.audit.emit(user=self.user, tool=name, domain=self.domain_for(name), stage="pre",
+                                write=False, decision="deny", rule="rate-limit",
+                                evidence={"count": count, "max": self.rate_limiter.max,
+                                          "window_s": self.rate_limiter.window})
+                return self._refuse(
+                    f"Rate limit exceeded: more than {self.rate_limiter.max} calls in "
+                    f"{self.rate_limiter.window}s. Slow down and retry shortly.")
 
         domain = self.domain_for(name)
 

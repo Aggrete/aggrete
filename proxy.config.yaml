@@ -105,6 +105,14 @@ tool_integrity:
   on_poison: block
   scan_poison: true
 
+# Per-user rate limit: at most `max_calls` tool calls per `window` (a fixed
+# window; suffixes s/m/h/d). A denial-of-wallet and abuse ceiling, shared across
+# replicas when a Redis `store:` is configured. Built-in tools (check, scenarios)
+# are exempt. Remove to turn it off.
+rate_limit:
+  max_calls: 120
+  window: 1m
+
 upstreams:
   hr:
     command: python3

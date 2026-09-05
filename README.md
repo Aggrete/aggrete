@@ -55,6 +55,8 @@ Or clone this repo to get the demo, sample policy and Helm chart.
   and flags any later change to its description or schema (a rug pull), and scans
   descriptions for hidden instructions (tool poisoning). Alert or block, per
   `tool_integrity:`. Deterministic, no model in the path.
+- **Rate limiting:** a per-user ceiling on tool calls per window (`rate_limit:`),
+  shared across replicas via Redis. A denial-of-wallet and abuse control.
 
 **Governing writes (egress).** A tool that acts on the world (create, update,
 upload, post, send, share) is classified as a write and governed as egress: any
