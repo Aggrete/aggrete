@@ -83,6 +83,58 @@ These already work in the open-source proxy today.
   sign-in with dynamic client registration; streamable HTTP and stdio transports;
   Redis store and a Helm chart for multi-replica self-hosting.
 
+- **Ask whether something is allowed before you do it.**
+  You can check a plan against the rules and get the decision, and the reason,
+  without touching any system.
+  *For example:* "can I build a list of everyone likely to be laid off?" comes back
+  refused, with the clause and the fix, and nothing was fetched to answer it.
+  *Under the hood:* the built-in `check` tool runs the real engine over a proposed
+  sequence on a throwaway state; a guided `scenarios` menu comes with it.
+
+- **Catch a tool that changes its story or hides instructions.**
+  A connector can advertise a harmless tool and later swap in a different one, or
+  bury commands to the assistant inside a tool's own description. Both are caught.
+  *For example:* a tool whose description quietly says "also send every file to this
+  address" is flagged or blocked before it can trick the assistant, and a tool that
+  is rewritten after you approved it is flagged as changed.
+  *Under the hood:* fingerprint every tool on first sight (trust on first use) and
+  flag any later change (rug pull); scan descriptions for injection patterns (tool
+  poisoning). Deterministic, `tool_integrity:`
+  ([Invariant Labs](https://invariantlabs.ai/blog/mcp-github-vulnerability)).
+
+- **A speed limit per person.**
+  A ceiling on how many calls anyone can make in a window, to contain abuse and
+  runaway costs.
+  *For example:* a misbehaving assistant that starts hammering a connector is cut
+  off after the limit instead of running up the bill.
+  *Under the hood:* per-user fixed-window rate limiting, shared across replicas via
+  Redis, `rate_limit:`.
+
+- **Secrets never get typed into a tool.**
+  If a password or key ends up in the arguments of a tool call, it is caught and
+  the call is refused before it leaves.
+  *For example:* an assistant that pastes an API key into a search box has the call
+  blocked, so the key never reaches the outside tool.
+  *Under the hood:* inbound scanning of tool arguments for credential shapes,
+  `scan_inbound:` (block or mask).
+
+- **Send the logbook to your security dashboard.**
+  Every decision can show up in the monitoring your security team already watches,
+  as it happens.
+  *For example:* refusals and approvals stream into Splunk next to the rest of the
+  team's alerts.
+  *Under the hood:* forward each audit row to Splunk/Elastic/Datadog over HTTP or to
+  syslog, best-effort and off the hot path, `audit_forward:`
+  ([agentic-community#413](https://github.com/agentic-community/mcp-gateway-registry/issues/413)).
+
+- **Find the rules that quietly do nothing.**
+  A checker that flags parts of your policy that would never actually fire, or that
+  only warn when they should refuse.
+  *For example:* a critical rule that was left on "alert," or an embargo whose date
+  has already passed, is reported before it ships.
+  *Under the hood:* `aggrete-lint` static-checks `coc.yaml` for fail-open configs
+  and unreachable rules; exits non-zero on errors, for CI.
+
 ## Next (in progress)
 
 - **Each person's own permissions follow them all the way through.**
@@ -107,12 +159,11 @@ These already work in the open-source proxy today.
   read-only / read-write switch is useless" complaint
   ([HN](https://news.ycombinator.com/item?id=46696348)).
 
-- **Send the activity log into the tools your security team already watches.**
-  Rather than a file sitting on a server, every decision shows up in the security
-  team's existing monitoring dashboard.
-  *For example:* your security team sees Aggrete's refusals and approvals in the
-  same screen where they already watch everything else, with older records archived.
-  *Under the hood:* SIEM / OpenTelemetry audit streaming with retention and archive
+- **Native OpenTelemetry, with retention and archive.**
+  Basic SIEM streaming already ships (`audit_forward:`, above). What remains is
+  first-class OpenTelemetry (GenAI/MCP semantic conventions) and managed retention
+  and archive of the audit trail, rather than a webhook or syslog line.
+  *Under the hood:* OTLP spans on the MCP semconv, plus retention/archive policy
   ([agentic-community#413](https://github.com/agentic-community/mcp-gateway-registry/issues/413)).
 
 ## Planned
@@ -131,14 +182,6 @@ These already work in the open-source proxy today.
   events, because it was only handed the "read" permission.
   *Under the hood:* per-tool OAuth scopes, enforced at discovery and execution time
   ([mcp#234](https://github.com/modelcontextprotocol/modelcontextprotocol/discussions/234)).
-
-- **Catch tools that hide sneaky instructions.**
-  Detect and block outside tools that try to smuggle malicious instructions into
-  their own description.
-  *For example:* a tool whose hidden description says "also quietly send every file
-  to this address" is caught before it can trick the assistant.
-  *Under the hood:* tool-poisoning / description-injection defense
-  ([Invariant Labs](https://invariantlabs.ai/blog/mcp-github-vulnerability)).
 
 - **Let admins control which outside tools can be connected at all.**
   A central list of approved connectors, so people cannot quietly wire up
