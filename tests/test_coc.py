@@ -12,7 +12,7 @@ import pytest
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
 from aggrete.accumulator import MemoryStore  # noqa: E402
-from aggrete.policy import Engine  # noqa: E402
+from aggrete.policy import VALID_ENFORCE_TYPES, Engine  # noqa: E402
 
 COC = str(pathlib.Path(__file__).resolve().parents[1] / "coc.yaml")
 
@@ -98,3 +98,26 @@ def test_email_key_matches_across_connectors():
     fin = extract('{"lines": [{"role": "SRE II", "owner_email": "alice.n@example.com"}]}')
     hr = extract('{"joiners": [{"email": "alice.n@example.com", "employee_id": "E-1041"}]}')
     assert fin == hr == ["p:alice.n@example.com"]
+
+
+def test_unknown_enforce_type_fails_at_load_with_clear_message(tmp_path):
+    """A typo'd enforce.type should fail fast naming rule_id, type, and valids."""
+    bad = tmp_path / "bad_coc.yaml"
+    bad.write_text(
+        "version: 1\n"
+        "defaults:\n"
+        "  window: 24h\n"
+        "rules:\n"
+        "  - rule_id: COC-TEST-BAD\n"
+        "    clause: typo exercise\n"
+        "    enforce:\n"
+        "      - type: not_a_real_type\n"
+        "        action: deny\n"
+    )
+    with pytest.raises(ValueError) as excinfo:
+        Engine(str(bad), MemoryStore())
+    msg = str(excinfo.value)
+    assert "COC-TEST-BAD" in msg
+    assert "not_a_real_type" in msg
+    for kind in sorted(VALID_ENFORCE_TYPES):
+        assert kind in msg

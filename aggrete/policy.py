@@ -13,6 +13,17 @@ import yaml
 
 from .accumulator import MemoryStore, Store, parse_window
 
+# Types the engine knows how to evaluate. Unknown values fail at load time.
+VALID_ENFORCE_TYPES = frozenset({
+    "domain_join",
+    "self_comparison",
+    "wall",
+    "min_group",
+    "entity_budget",
+    "flow",
+    "domain_block",
+})
+
 
 @dataclass
 class Decision:
@@ -48,6 +59,13 @@ class Rule:
         self.enforce = []
         for e in raw.get("enforce", []):
             e = dict(e)
+            kind = e.get("type")
+            if kind not in VALID_ENFORCE_TYPES:
+                valid = ", ".join(sorted(VALID_ENFORCE_TYPES))
+                raise ValueError(
+                    f"rule {self.id}: unknown enforce type {kind!r}; "
+                    f"valid types: {valid}"
+                )
             e["window_s"] = parse_window(e.get("window", defaults.get("window", "24h")))
             self.enforce.append(e)
 
