@@ -47,6 +47,39 @@ instructions: >
   Or call aggrete__check with a list of tool calls to ask whether they would be
   allowed, and why, without fetching anything. Run your own at https://aggrete.com/guide
 
+# Menu returned by the built-in `scenarios` tool. Per-deployment, so it names the
+# tools this instance exposes. `{user}` is replaced with the caller. Omit it and
+# `scenarios` just points people at `check`.
+scenarios: |
+  Things to try. Each shows Aggrete making a different kind of decision. Run the
+  tool calls for real, or preview any of them with aggrete__check (nothing is fetched).
+
+  1. Redaction. Call hr__leave_balance with any email. The email comes back masked;
+     the policy still ran on the original.
+
+  2. A combination the code of conduct forbids. Call hr__recent_joiners, then
+     finance__budget_roles, then ops__oncall_draft for the same team. Combining
+     personnel, budget and rota to profile people is refused (COC-HR-004).
+
+  3. Individual pay. Call finance__pay_band for a small category (try 'executives').
+     Figures describing fewer than ten people are individual pay and are refused
+     (COC-HR-031). A large category (try 'engineering') is fine.
+
+  4. Comparing colleagues. Call hr__timecard for your own email ({user}), then for a
+     colleague's. Putting your record next to a colleague's to compare is refused
+     (COC-HR-021).
+
+  5. The prompt-injection shield. Call corp__read_public_post (untrusted web content),
+     then try corp__post_note. Once a session has read untrusted content it may not
+     write out; the write is refused (COC-SEC-002). Post first and it is allowed.
+
+  6. Tools you cannot even see. Some tools are hidden from you entirely. Run
+     aggrete__check with ["corp__restructuring_plan"] or ["corp__secret"] to see why
+     (an embargo wall, and a blocked secret store).
+
+  7. Ask before you act. aggrete__check takes a list of tool calls and tells you the
+     decision, the rule, and the fix, without running anything.
+
 brand:
   title: Aggrete
   website_url: https://aggrete.com

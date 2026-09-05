@@ -360,37 +360,16 @@ class Proxy:
         return "flagged"
 
     def _run_scenarios(self) -> types.CallToolResult:
-        """A guided menu, so nobody has to guess the choreography that trips a rule."""
-        user = self.user
-        return self._refuse("\n".join([
-            "Things to try. Each shows Aggrete making a different kind of decision. You can run the",
-            "tool calls for real, or preview any of them with aggrete__check (no data is fetched).",
-            "",
-            "1. Redaction. Call hr__leave_balance with any email. The email comes back masked; the",
-            "   policy still ran on the original.",
-            "",
-            "2. A combination the code of conduct forbids. Call hr__recent_joiners, then",
-            "   finance__budget_roles, then ops__oncall_draft for the same team. Combining personnel,",
-            "   budget and rota to profile people is refused (COC-HR-004), before any data is fetched.",
-            "",
-            "3. Individual pay. Call finance__pay_band for a small category (try 'executives'). Pay",
-            "   figures describing fewer than ten people are individual pay and are refused (COC-HR-031).",
-            "   A large category (try 'engineering') is fine.",
-            "",
-            f"4. Comparing colleagues. Call hr__timecard for your own email ({user}), then for a",
-            "   colleague's. Putting your record next to a colleague's to compare is refused (COC-HR-021).",
-            "",
-            "5. The prompt-injection shield. Call corp__read_public_post (untrusted web content), then",
-            "   try corp__post_note. Once a session has read untrusted content it may not write out;",
-            "   the write is refused (COC-SEC-002). Post first, without the read, and it is allowed.",
-            "",
-            "6. Tools you cannot even see. Some tools are hidden from you entirely. Run",
-            "   aggrete__check with [\"corp__restructuring_plan\"] or [\"corp__secret\"] to see why",
-            "   (an embargo wall, and a blocked secret store).",
-            "",
-            "7. Ask before you act. aggrete__check takes a list of tool calls and tells you the",
-            "   decision, the rule, and the fix, without running anything.",
-        ]))
+        """A guided menu. Supplied per-deployment via `scenarios:` in the config so
+        it names the tools this instance actually exposes; `{user}` is substituted
+        with the caller. Falls back to pointing at `check` when unset."""
+        text = self.cfg.get("scenarios")
+        if not text:
+            return self._refuse(
+                "Call aggrete__check with a list of tool calls to see whether they would be "
+                "allowed, and why, without fetching anything, using the tool names on this "
+                "server, for example {\"tools\": [\"hr__recent_joiners\", \"finance__budget_roles\"]}.")
+        return self._refuse(str(text).replace("{user}", self.user).rstrip())
 
     def _refuse(self, message: str) -> types.CallToolResult:
         # Not is_error: the model should read this and relay it, not retry it.
