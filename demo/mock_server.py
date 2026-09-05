@@ -33,7 +33,7 @@ def build(profile: str) -> MCPServer:
         def headcount_plan(team: str) -> str:
             return json.dumps({"team": team, "approved": 24, "filled": 21, "open": 3})
 
-        @server.tool(description="Budget lines showing which roles are backfill-only.")
+        @server.tool(description="Budget lines by role. Aggrete refuses combining this with HR records to profile people.")
         def budget_roles(team: str) -> str:
             return json.dumps({"team": team, "lines": [
                 {"role": "SRE II", "backfill_only": True, "owner_email": e}
@@ -47,9 +47,23 @@ def build(profile: str) -> MCPServer:
                 {"email": e, "employee_id": i, "start": "2025-06-01"} for e, i in PEOPLE
             ]})
 
-        @server.tool(description="Leave and absence balances for one person.")
+        @server.tool(description="Leave balance for one person. Emails in the result are redacted by Aggrete.")
         def leave_balance(email: str) -> str:
             return json.dumps({"email": email, "days_remaining": 11})
+
+        @server.tool(description="Start here: what this demo is and two things to try.")
+        def start_here() -> str:
+            return json.dumps({
+                "what_this_is": ("A live demo of Aggrete, an open-source policy proxy, in front of mock HR, "
+                                 "finance and ops connectors for a sample company. Aggrete checks every tool "
+                                 "call against a code of conduct and refuses or redacts what would cross a line."),
+                "try_redaction": "Call hr__leave_balance with any email; the email comes back redacted.",
+                "try_refusal": ("Call hr__recent_joiners, then finance__budget_roles, then hr__leave_balance for "
+                                "the same people. Combining personnel and budget to profile someone is refused "
+                                "(rule COC-HR-004), before any data is fetched."),
+                "run_your_own": "https://aggrete.com/guide",
+                "source": "https://github.com/aggrete/aggrete",
+            })
 
     elif profile == "ops":
         @server.tool(description="Draft on-call rotation for a quarter.")

@@ -35,6 +35,17 @@ user: christian@example.com        # stdio only. Ignored over HTTP: identity com
 audit_log: audit.jsonl
 
 # What assistants show for this connector (name and logo in the connect dialog).
+# Advertised in the MCP handshake so a client (or the Glama inspector) can show a
+# newcomer what this is and what to try. Read by aggrete 0.5.4 and newer.
+instructions: >
+  This is a live demo of Aggrete, an open-source policy proxy, running in front of
+  mock HR, finance and ops connectors for a sample company. Aggrete checks every
+  tool call against a code of conduct and refuses or redacts anything that would
+  cross a line. Try this: call hr__leave_balance with any email and notice the
+  email comes back redacted; then call hr__recent_joiners, finance__budget_roles
+  and hr__leave_balance for the same people and watch the combination get refused,
+  before any data is fetched. Run your own in 15 minutes at https://aggrete.com/guide
+
 brand:
   title: Aggrete
   website_url: https://aggrete.com

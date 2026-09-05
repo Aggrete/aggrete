@@ -368,6 +368,7 @@ async def main() -> None:
         "aggrete",
         version=_ver,
         title=brand.get("title", "Aggrete"),
+        instructions=cfg.get("instructions"),  # advertised in the MCP handshake; clients surface it
         website_url=brand.get("website_url", "https://aggrete.com"),
         icons=icons,
         on_list_tools=proxy.list_tools,
