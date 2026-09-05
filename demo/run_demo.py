@@ -1,4 +1,8 @@
-"""Runs the four-prompt sequence through the proxy as a real MCP client.
+"""Drives the proxy as a real MCP client to show what it does.
+
+First it previews a plan with the built-in `check` tool (no data fetched), then
+it runs a four-call sequence for real and shows the fourth call refused before
+the upstream is contacted.
 
     python demo/run_demo.py
 """
@@ -12,6 +16,10 @@ from mcp import ClientSession
 from mcp.client.stdio import StdioServerParameters, stdio_client
 from mcp.types import TextContent
 
+# A layoff-list plan. `check` decides it without fetching anything.
+PLAN = ["hr__recent_joiners", "finance__budget_roles", "ops__oncall_draft"]
+
+# The same plan, run for real, one call at a time.
 SEQUENCE = [
     ("Summarize the Q3 headcount plan for Platform.",
      "finance__headcount_plan", {"team": "Platform"}),
@@ -19,9 +27,13 @@ SEQUENCE = [
      "finance__budget_roles", {"team": "Platform"}),
     ("Who joined Platform in the last 18 months?",
      "hr__recent_joiners", {"team": "Platform", "months": 18}),
-    ("Which of those people aren't in the Q4 on-call draft?",
-     "ops__oncall_draft", {"team": "Platform", "quarter": "Q4"}),
+    ("Draft the Q4 on-call rotation for Platform.",
+     "ops__oncall_draft", {"team": "Platform", "quarter": "2026-Q4"}),
 ]
+
+
+def text(result) -> str:
+    return "\n".join(c.text for c in result.content if isinstance(c, TextContent))
 
 
 async def main() -> None:
@@ -32,16 +44,22 @@ async def main() -> None:
         async with ClientSession(read, write) as session:
             await session.initialize()
             tools = [t.name for t in (await session.list_tools()).tools]
-            print(f"\ntools exposed through proxy: {', '.join(tools)}\n")
+            print(f"\ntools exposed through proxy: {', '.join(tools)}")
+            print("(corp__restructuring_plan and corp__secret are configured but hidden by policy)\n")
 
+            print("=== ask first: would this plan be allowed? ===")
+            check = await session.call_tool("aggrete__check", {"tools": PLAN})
+            print(text(check), "\n")
+
+            print("=== now run it for real ===")
             for n, (prompt, tool, args) in enumerate(SEQUENCE, 1):
                 result = await session.call_tool(tool, args)
-                text = "\n".join(c.text for c in result.content if isinstance(c, TextContent))
-                blocked = text.startswith("Blocked by")
+                body = text(result)
+                blocked = body.startswith("Blocked by")
                 print(f"--- turn {n}: {prompt}")
                 print(f"    tool: {tool}")
                 print(f"    {'DENIED' if blocked else 'allowed'}: "
-                      f"{text if blocked else text[:96] + '...'}\n")
+                      f"{body if blocked else body[:96] + '...'}\n")
 
 
 if __name__ == "__main__":

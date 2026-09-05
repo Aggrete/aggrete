@@ -39,12 +39,13 @@ audit_log: audit.jsonl
 # newcomer what this is and what to try. Read by aggrete 0.5.4 and newer.
 instructions: >
   This is a live demo of Aggrete, an open-source policy proxy, running in front of
-  mock HR, finance and ops connectors for a sample company. Aggrete checks every
-  tool call against a code of conduct and refuses or redacts anything that would
-  cross a line. Try this: call hr__leave_balance with any email and notice the
-  email comes back redacted; then call hr__recent_joiners, finance__budget_roles
-  and hr__leave_balance for the same people and watch the combination get refused,
-  before any data is fetched. Run your own in 15 minutes at https://aggrete.com/guide
+  mock HR, finance, ops and corp connectors for a sample company. Aggrete checks
+  every tool call against a code of conduct and refuses or redacts anything that
+  would cross a line. New here? Call aggrete__scenarios for a menu of things to try,
+  each showing a different kind of decision (redaction, a forbidden combination,
+  individual pay, comparing colleagues, the prompt-injection shield, hidden tools).
+  Or call aggrete__check with a list of tool calls to ask whether they would be
+  allowed, and why, without fetching anything. Run your own at https://aggrete.com/guide
 
 brand:
   title: Aggrete
@@ -70,6 +71,9 @@ upstreams:
   ops:
     command: python3
     args: [demo/mock_server.py, --profile, ops]
+  corp:
+    command: python3
+    args: [demo/mock_server.py, --profile, corp]
   # Remote connector over streamable HTTP. Header values may use ${ENV_VAR};
   # the proxy holds the upstream credential, the end user never does.
   # ops:
@@ -81,9 +85,15 @@ upstreams:
 # Order matters: first match wins.
 domains:
   "finance__headcount_plan": finance-planning
+  "finance__pay_band": pay-aggregates
   "finance__*": finance-comp
+  "hr__timecard": timesheets
   "hr__*": hr-personnel
   "ops__*": ops-rota
+  "corp__read_public_post": untrusted-web
+  "corp__post_note": shared-notes
+  "corp__restructuring_plan": restructuring-plan
+  "corp__secret": secrets-store
   # "drive__*": timesheets   # example: Google Drive connector holding team timesheets
 
 default_domain: unclassified

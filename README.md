@@ -38,6 +38,10 @@ Or clone this repo to get the demo, sample policy and Helm chart.
 - **Try it in one command:** `aggrete --demo` (or `docker run --rm ghcr.io/aggrete/aggrete --demo`) runs the four-question walkthrough with no config, auth, or network.
 - Refuses forbidden calls **before** the upstream is contacted, using a YAML
   policy and per-user memory that accumulates across calls and sessions.
+- **Ask before you act:** a built-in `check` tool dry-runs a proposed sequence of
+  calls and returns the decision, the rule, the clause and the remediation without
+  fetching anything, and `scenarios` lists things to try. Both are answered by the
+  proxy itself (disable with `builtin_tools: false`).
 - **Tamper-evident audit**: every decision is one hash-chained JSON line. Verify
   with `aggrete-audit audit.jsonl` (breaks are reported by line number).
 - **Selective tool exposure**: walls and blocks in the policy hide tools from
@@ -66,18 +70,31 @@ python -m venv .venv && .venv/bin/pip install mcp pyyaml pytest
 .venv/bin/python demo/run_demo.py       # the four-prompt sequence, end to end
 ```
 
-Output:
+It first previews the plan with the built-in `check` tool, then runs it for real:
 
 ```
+=== ask first: would this plan be allowed? ===
+Plan check: REFUSED.
+  1. hr__recent_joiners     [hr-personnel]  ->  allowed
+  2. finance__budget_roles  [finance-comp]  ->  allowed
+  3. ops__oncall_draft      [ops-rota]      ->  REFUSED   COC-HR-004
+     Personnel records, compensation or budget records, and operational rosters
+     may not be combined to derive ... identifiable individuals.
+     Fix: request a purpose-bound session from HR Privacy ...
+
+=== now run it for real ===
 turn 1  finance__headcount_plan   allowed
-turn 2  finance__budget_roles     allowed
-turn 3  hr__recent_joiners        allowed   (alert: COC-HR-011, 20 distinct > 8)
+turn 2  finance__budget_roles     allowed   (owner emails redacted)
+turn 3  hr__recent_joiners        allowed   (emails redacted)
 turn 4  ops__oncall_draft         DENIED    COC-HR-004
 ```
 
 Turn 4 is denied **before the upstream call**, so the on-call data is never
-fetched. The two domains already held overlap on the same people, and this call
-would complete the forbidden set.
+fetched. The three domains overlap on the same people, and this call would
+complete the forbidden set. `check` reached the same verdict without fetching
+anything. Call `aggrete__scenarios` through the proxy for more to try: individual
+pay (`min_group`), comparing colleagues (`self_comparison`), the prompt-injection
+shield (`flow`), and tools hidden behind a wall or block.
 
 ## The document is the source of truth
 

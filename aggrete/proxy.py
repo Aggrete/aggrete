@@ -47,6 +47,12 @@ DEFAULT_WRITE_TOOLS = ["*create*", "*update*", "*write*", "*upload*", "*delete*"
                        "*post*", "*send*", "*share*", "*append*", "*move*", "*put*"]
 ENV_REF = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
 
+# Built-in tools the proxy answers itself (no upstream). `check` dry-runs a
+# proposed plan against the policy; `scenarios` lists things to try. Disable
+# with `builtin_tools: false` in the config.
+CHECK_TOOL = f"aggrete{SEP}check"
+SCENARIOS_TOOL = f"aggrete{SEP}scenarios"
+
 
 def expand_env(value: str) -> str:
     """Replace ${VAR} references so secrets stay out of the config file."""
@@ -147,7 +153,52 @@ class Proxy:
                         inputSchema=t.input_schema,
                     )
                 )
+        if self.cfg.get("builtin_tools", True):
+            tools.extend(self._builtin_tools())
         return types.ListToolsResult(tools=tools)
+
+    def _builtin_tools(self) -> list[types.Tool]:
+        """Tools the proxy answers itself, so the policy is explorable without
+        having to trip it. `check` is a dry run; `scenarios` is a guided menu."""
+        return [
+            types.Tool(
+                name=CHECK_TOOL,
+                title="Check a plan against the code of conduct",
+                description=(
+                    "Ask whether a sequence of tool calls would be allowed before running any of "
+                    "them. Returns the decision (allowed, allowed-with-alert, or refused), the rule "
+                    "that applies, its clause, and the remediation. Nothing is fetched. Use this to "
+                    "answer 'can I do X?' questions: translate the request into the tool calls it "
+                    "would take, then pass them as `tools` in order."),
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "tools": {
+                            "type": "array", "items": {"type": "string"},
+                            "description": ("The tool calls you are considering, in order, by their "
+                                            "exact names on this server, e.g. [\"hr__recent_joiners\", "
+                                            "\"finance__budget_roles\", \"hr__leave_balance\"]."),
+                        },
+                        "entities": {
+                            "type": "array", "items": {"type": "string"},
+                            "description": ("Optional. The people the plan concerns, as p:<email> ids, "
+                                            "applied to each read. Omit to evaluate assuming the calls "
+                                            "concern the same people (you and a colleague)."),
+                        },
+                    },
+                    "required": ["tools"],
+                },
+            ),
+            types.Tool(
+                name=SCENARIOS_TOOL,
+                title="Things to try in this demo",
+                description=("List concrete things to try here, each showing a different kind of "
+                             "policy decision (redaction, refusing a combination, individual pay, "
+                             "comparing colleagues, the prompt-injection shield, hidden tools). "
+                             "Takes no arguments. Start here if you are new."),
+                inputSchema={"type": "object", "properties": {}},
+            ),
+        ]
 
     def _is_write(self, name: str) -> bool:
         """A call that acts on the world (write/egress). Governed as egress by
@@ -163,6 +214,13 @@ class Proxy:
 
     async def call_tool(self, ctx, params: types.CallToolRequestParams) -> types.CallToolResult:
         name, args = params.name, params.arguments or {}
+
+        if self.cfg.get("builtin_tools", True):
+            if name == CHECK_TOOL:
+                return self._run_check(args)
+            if name == SCENARIOS_TOOL:
+                return self._run_scenarios()
+
         domain = self.domain_for(name)
 
         if not self._tool_allowed(name):
@@ -224,6 +282,115 @@ class Proxy:
                 new_content.append(c)
         result.content = new_content
         return result, total
+
+    # ---------- built-in tools: check and scenarios ----------
+
+    def _run_check(self, args: dict) -> types.CallToolResult:
+        """Dry-run a proposed plan against the policy and report the verdict,
+        without fetching anything. The heart of 'would this be allowed?'."""
+        tools = args.get("tools") or []
+        if isinstance(tools, str):
+            tools = [tools]
+        tools = [str(t) for t in tools]
+        if not tools:
+            return self._refuse(
+                "check: pass `tools`, the list of tool calls you are considering, in order. "
+                "For example {\"tools\": [\"hr__recent_joiners\", \"finance__budget_roles\", "
+                "\"hr__leave_balance\"]}. Call aggrete__scenarios for ideas.")
+
+        user = self.user
+        supplied = args.get("entities")
+        # Default probe: you and a colleague, so relationship rules (join,
+        # comparison, small-group) are visible. Reads carry it; writes do not.
+        probe = ([str(e) for e in supplied] if supplied
+                 else [f"p:{user.strip().lower()}", "p:teammate@example.com"])
+        steps = []
+        for name in tools:
+            is_write = self._is_write(name)
+            steps.append({"tool": name, "domain": self.domain_for(name),
+                          "write": is_write, "entities": [] if is_write else probe})
+
+        results, blocked_at = self.engine.simulate(steps, user)
+        self.audit.emit(user=user, tool=CHECK_TOOL, domain="-", stage="check", write=False,
+                        decision="deny" if blocked_at is not None else "allow",
+                        rule=(results[blocked_at]["decision"].rule_id if blocked_at is not None else None),
+                        evidence={"tools": tools})
+        return self._refuse(self._format_check(tools, steps, results, blocked_at, bool(supplied)))
+
+    def _format_check(self, tools, steps, results, blocked_at, supplied) -> str:
+        head = "REFUSED" if blocked_at is not None else "allowed"
+        out = [f"Plan check: {head}.", ""]
+        tag = {"allow": "allowed", "alert": "allowed (with an alert)", "deny": "REFUSED"}
+        for i, name in enumerate(tools):
+            dom = steps[i]["domain"]
+            if i >= len(results):
+                out.append(f"  {i + 1}. {name}  [{dom}]  ->  not reached (the plan is already refused)")
+                continue
+            r = results[i]
+            d = r["decision"]
+            line = f"  {i + 1}. {name}  [{dom}]  ->  {tag[r['verdict']]}"
+            if r["verdict"] == "deny":
+                line += f"   {d.rule_id}"
+            out.append(line)
+            if r["verdict"] == "alert":
+                for a in d.alerts:
+                    out.append(f"        alert {a.get('rule_id', '')}: {self._alert_phrase(a)}")
+            if r["verdict"] == "deny":
+                out += ["",
+                        f"     {' '.join((d.clause or '').split())}",
+                        f"     Fix: {' '.join((d.remediation or '').split())}",
+                        f"     Rule owner: {d.owner}", ""]
+        out.append("")
+        if supplied:
+            out.append("Evaluated for the people you named.")
+        else:
+            out.append("Evaluated assuming these calls concern the same people (you and a "
+                       "colleague). Pass `entities` (p:<email> ids) for an exact check.")
+        out.append("Nothing was fetched to produce this. Run the calls for real to see it enforced.")
+        return "\n".join(out)
+
+    @staticmethod
+    def _alert_phrase(a: dict) -> str:
+        if "distinct" in a:
+            return f"{a['distinct']} distinct people, over the budget of {a['max']}"
+        if "people" in a:
+            return f"a result about {a['people']} people, under the minimum of {a['k']}"
+        if "overlap" in a:
+            return f"overlapping on {len(a['overlap'])} people"
+        return "flagged"
+
+    def _run_scenarios(self) -> types.CallToolResult:
+        """A guided menu, so nobody has to guess the choreography that trips a rule."""
+        user = self.user
+        return self._refuse("\n".join([
+            "Things to try. Each shows Aggrete making a different kind of decision. You can run the",
+            "tool calls for real, or preview any of them with aggrete__check (no data is fetched).",
+            "",
+            "1. Redaction. Call hr__leave_balance with any email. The email comes back masked; the",
+            "   policy still ran on the original.",
+            "",
+            "2. A combination the code of conduct forbids. Call hr__recent_joiners, then",
+            "   finance__budget_roles, then ops__oncall_draft for the same team. Combining personnel,",
+            "   budget and rota to profile people is refused (COC-HR-004), before any data is fetched.",
+            "",
+            "3. Individual pay. Call finance__pay_band for a small category (try 'executives'). Pay",
+            "   figures describing fewer than ten people are individual pay and are refused (COC-HR-031).",
+            "   A large category (try 'engineering') is fine.",
+            "",
+            f"4. Comparing colleagues. Call hr__timecard for your own email ({user}), then for a",
+            "   colleague's. Putting your record next to a colleague's to compare is refused (COC-HR-021).",
+            "",
+            "5. The prompt-injection shield. Call corp__read_public_post (untrusted web content), then",
+            "   try corp__post_note. Once a session has read untrusted content it may not write out;",
+            "   the write is refused (COC-SEC-002). Post first, without the read, and it is allowed.",
+            "",
+            "6. Tools you cannot even see. Some tools are hidden from you entirely. Run",
+            "   aggrete__check with [\"corp__restructuring_plan\"] or [\"corp__secret\"] to see why",
+            "   (an embargo wall, and a blocked secret store).",
+            "",
+            "7. Ask before you act. aggrete__check takes a list of tool calls and tells you the",
+            "   decision, the rule, and the fix, without running anything.",
+        ]))
 
     def _refuse(self, message: str) -> types.CallToolResult:
         # Not is_error: the model should read this and relay it, not retry it.

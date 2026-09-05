@@ -190,12 +190,16 @@ class Engine:
 
     # ---------- before the upstream call ----------
 
-    def pre_call(self, user: str, domain: str, is_write: bool = False) -> Decision:
+    def pre_call(self, user: str, domain: str, is_write: bool = False, store: Store | None = None) -> Decision:
         """Deny before fetching where we already know enough to decide.
 
         This is the difference between blocking a leak and merely logging one:
         data that is never retrieved cannot be redacted imperfectly.
+
+        `store` defaults to the engine's own accumulator; pass a throwaway one
+        to evaluate a hypothetical call without touching real state (`simulate`).
         """
+        store = self.store if store is None else store
         for rule in self.rules:
             if not self._active(rule):
                 continue
@@ -208,9 +212,9 @@ class Engine:
                     continue
                 if e.get("action", "deny") != "deny":
                     continue
-                tainted = [t for t in e.get("taint_domains", []) if t in self.store.domains(user)]
+                tainted = [t for t in e.get("taint_domains", []) if t in store.domains(user)]
                 if tainted:
-                    if purpose := self.store.granted(user, rule.id):
+                    if purpose := store.granted(user, rule.id):
                         return Decision(allow=True, rule_id=rule.id, granted_purpose=purpose)
                     return self._deny(rule, {"egress": domain, "tainted_by": tainted})
             for e in rule.blocks("domain_block"):
@@ -223,7 +227,7 @@ class Engine:
                     continue
                 if e.get("action", "deny") != "deny":
                     continue
-                if purpose := self.store.granted(user, rule.id):
+                if purpose := store.granted(user, rule.id):
                     return Decision(allow=True, rule_id=rule.id, granted_purpose=purpose)
                 return self._deny(rule, {"domain": domain, "until": e.get("until"),
                                          "allowed_users": e.get("allowed_users"), "blocked_users": e.get("blocked_users")})
@@ -231,18 +235,18 @@ class Engine:
             for e in rule.blocks("domain_join"):
                 if domain not in e["domains"] or not in_scope(e, user):
                     continue
-                already = [d for d in e["domains"] if d != domain and d in self.store.domains(user)]
+                already = [d for d in e["domains"] if d != domain and d in store.domains(user)]
                 if len(already) != len(e["domains"]) - 1:
                     continue  # this call would not complete the set
                 if e.get("require_entity_overlap", True):
-                    overlap = set.intersection(*[self.store.entities(user, d) for d in already])
+                    overlap = set.intersection(*[store.entities(user, d) for d in already])
                     if not overlap:
                         continue
                 else:
                     overlap = set()
                 if e.get("action", "deny") != "deny":
                     continue
-                if purpose := self.store.granted(user, rule.id):
+                if purpose := store.granted(user, rule.id):
                     return Decision(allow=True, rule_id=rule.id, granted_purpose=purpose)
                 return self._deny(
                     rule,
@@ -276,10 +280,15 @@ class Engine:
 
     # ---------- after the upstream call ----------
 
-    def post_call(self, user: str, domain: str, entities: list[str]) -> Decision:
-        """Record what came back, then re-evaluate. Denials redact the result."""
+    def post_call(self, user: str, domain: str, entities: list[str], store: Store | None = None) -> Decision:
+        """Record what came back, then re-evaluate. Denials redact the result.
+
+        `store` defaults to the engine's own accumulator; pass a throwaway one
+        to evaluate a hypothetical call without recording it (`simulate`).
+        """
+        store = self.store if store is None else store
         ttl = max((e["window_s"] for r in self.rules for e in r.enforce), default=86400)
-        self.store.record(user, domain, entities, ttl)
+        store.record(user, domain, entities, ttl)
 
         alerts: list[dict] = []
         for rule in self.rules:
@@ -292,18 +301,18 @@ class Engine:
                 n = len(set(entities))
                 if 0 < n < int(e.get("k", 10)):
                     hit = {"rule_id": rule.id, "domain": domain, "people": n, "k": int(e.get("k", 10))}
-                    if e.get("action", "alert") == "deny" and not self.store.granted(user, rule.id):
+                    if e.get("action", "alert") == "deny" and not store.granted(user, rule.id):
                         return self._deny(rule, hit)
                     alerts.append(hit)
 
             for e in rule.blocks("entity_budget"):
                 if e["domain"] != domain:
                     continue
-                count = len(self.store.entities(user, e["domain"]))
+                count = len(store.entities(user, e["domain"]))
                 if count > e["max_distinct"]:
                     hit = {"rule_id": rule.id, "domain": e["domain"],
                            "distinct": count, "max": e["max_distinct"]}
-                    if e.get("action", "alert") == "deny" and not self.store.granted(user, rule.id):
+                    if e.get("action", "alert") == "deny" and not store.granted(user, rule.id):
                         return self._deny(rule, hit)
                     alerts.append(hit)
 
@@ -312,34 +321,65 @@ class Engine:
                 # same domain: the precondition for any "how do I compare" answer.
                 if e["domain"] != domain:
                     continue
-                seen = self.store.entities(user, domain)
+                seen = store.entities(user, domain)
                 me = f"p:{user.strip().lower()}"
                 others = sorted(x for x in seen if x != me)
                 if me in seen and others:
                     hit = {"rule_id": rule.id, "domain": domain, "self": me,
                            "others": others[:10], "distinct_others": len(others)}
-                    if e.get("action", "alert") == "deny" and not self.store.granted(user, rule.id):
+                    if e.get("action", "alert") == "deny" and not store.granted(user, rule.id):
                         return self._deny(rule, hit)
                     alerts.append(hit)
 
             for e in rule.blocks("domain_join"):
                 if domain not in e["domains"] or not in_scope(e, user):
                     continue
-                if not set(e["domains"]) <= self.store.domains(user):
+                if not set(e["domains"]) <= store.domains(user):
                     continue
-                overlap = set.intersection(*[self.store.entities(user, d) for d in e["domains"]])
+                overlap = set.intersection(*[store.entities(user, d) for d in e["domains"]])
                 if e.get("require_entity_overlap", True) and not overlap:
                     continue
                 if e.get("action", "deny") != "deny":
                     alerts.append({"rule_id": rule.id, "overlap": sorted(overlap)[:10]})
                     continue
-                if purpose := self.store.granted(user, rule.id):
+                if purpose := store.granted(user, rule.id):
                     alerts.append({"rule_id": rule.id, "granted_purpose": purpose})
                     continue
                 return self._deny(rule, {"domains": e["domains"],
                                          "shared_entities": sorted(overlap)[:10]}, alerts)
 
         return Decision(allow=True, alerts=alerts)
+
+    # ---------- dry run: would this be allowed? ----------
+
+    def simulate(self, steps: list[dict], user: str) -> tuple[list[dict], int | None]:
+        """Replay a proposed sequence of calls against a throwaway store and
+        report the verdict per step, without touching real state or fetching
+        anything. Each step is {domain, write?, entities?}. Mirrors the proxy's
+        own pre_call -> post_call flow exactly, so the answer is faithful.
+
+        Returns (results, blocked_at) where results has one entry per step
+        evaluated ({step, verdict in allow|alert|deny, decision}) and blocked_at
+        is the index of the first denied step, or None if the whole plan passes.
+        A real client stops at the first deny, so evaluation stops there too.
+        """
+        sim = MemoryStore()
+        results: list[dict] = []
+        for i, step in enumerate(steps):
+            domain = step["domain"]
+            is_write = bool(step.get("write", False))
+            ents = list(step.get("entities", []))
+            pre = self.pre_call(user, domain, is_write=is_write, store=sim)
+            if not pre.allow:
+                results.append({"step": step, "verdict": "deny", "decision": pre})
+                return results, i
+            post = self.post_call(user, domain, ents, store=sim)
+            if not post.allow:
+                results.append({"step": step, "verdict": "deny", "decision": post})
+                return results, i
+            results.append({"step": step, "verdict": "alert" if post.alerts else "allow",
+                            "decision": post})
+        return results, None
 
     # ---------- purpose binding ----------
 
