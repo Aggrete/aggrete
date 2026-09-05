@@ -185,7 +185,7 @@ class Proxy:
         # proxy sets it, overriding anything the model supplied, so the assistant
         # can never choose whose permissions it acts under.
         if self.cfg.get("upstreams", {}).get(upstream, {}).get("impersonate"):
-            args = {**args, "_acting_user": self.user}
+            args = {**args, "acting_user": self.user}
         result = await session.call_tool(tool, args)
 
         # --- Layer 3/4, after the fetch ------------------------------------

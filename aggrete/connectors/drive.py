@@ -180,14 +180,14 @@ def build(drive: Drive, root_name: str, impersonate: bool = False) -> MCPServer:
         def make(fid=fid, label=label):
             def search(
                 query: Annotated[str, Field(default="", description="Words to match in a document's title or full text; leave empty to list every file in the folder.")] = "",
-                _acting_user: Annotated[str, Field(default="", description="Internal: email of the calling user for domain-wide-delegation impersonation, injected by the proxy. Leave empty.")] = "",
+                acting_user: Annotated[str, Field(default="", description="Internal: email of the calling user for domain-wide-delegation impersonation, injected by the proxy. Leave empty.")] = "",
             ) -> str:
                 """Files in this folder matching the query, each with owner and last-editor email.
 
                 Returns JSON: {folder, files: [{id, name, type, modified, owner_email, editor_email, link}]}.
                 """
-                if impersonate and _acting_user:
-                    drive.set_subject(_acting_user)
+                if impersonate and acting_user:
+                    drive.set_subject(acting_user)
                 return json.dumps({"folder": label, "files": [
                     {"id": x["id"], "name": x["name"], "type": x.get("mimeType"), "modified": x.get("modifiedTime"),
                      "owner_email": (x.get("owners") or [{}])[0].get("emailAddress"),
@@ -195,14 +195,14 @@ def build(drive: Drive, root_name: str, impersonate: bool = False) -> MCPServer:
                     for x in drive.search(fid, query)]})
             def read(
                 file_id: Annotated[str, Field(description="Drive file id to read, as returned in the 'id' field of a search result from this same folder.")],
-                _acting_user: Annotated[str, Field(default="", description="Internal: email of the calling user for domain-wide-delegation impersonation, injected by the proxy. Leave empty.")] = "",
+                acting_user: Annotated[str, Field(default="", description="Internal: email of the calling user for domain-wide-delegation impersonation, injected by the proxy. Leave empty.")] = "",
             ) -> str:
                 """Full text and metadata of one file, fenced to this folder (a file outside it is refused).
 
                 Returns JSON: {folder, name, owner_email, editor_email, text}.
                 """
-                if impersonate and _acting_user:
-                    drive.set_subject(_acting_user)
+                if impersonate and acting_user:
+                    drive.set_subject(acting_user)
                 meta, text = drive.read(file_id, fid)
                 return json.dumps({"folder": label, "name": meta["name"], "owner_email": (meta.get("owners") or [{}])[0].get("emailAddress"),
                                    "editor_email": (meta.get("lastModifyingUser") or {}).get("emailAddress"), "text": text})
@@ -222,11 +222,11 @@ def build(drive: Drive, root_name: str, impersonate: bool = False) -> MCPServer:
                 def create(
                     name: Annotated[str, Field(description="File name for the new document, for example 'Q4 summary.txt'.")],
                     content: Annotated[str, Field(description="Plain-text body of the document to create.")],
-                    _acting_user: Annotated[str, Field(default="", description="Internal: email of the calling user for domain-wide-delegation impersonation, injected by the proxy. Leave empty.")] = "",
+                    acting_user: Annotated[str, Field(default="", description="Internal: email of the calling user for domain-wide-delegation impersonation, injected by the proxy. Leave empty.")] = "",
                 ) -> str:
                     """Create one text document inside this folder. Returns JSON: {folder, created, id, link}."""
-                    if impersonate and _acting_user:
-                        drive.set_subject(_acting_user)
+                    if impersonate and acting_user:
+                        drive.set_subject(acting_user)
                     made = drive.create(fid, name, content)
                     return json.dumps({"folder": label, "created": made.get("name"),
                                        "id": made.get("id"), "link": made.get("webViewLink")})
