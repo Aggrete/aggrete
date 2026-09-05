@@ -34,6 +34,16 @@ user: christian@example.com        # stdio only. Ignored over HTTP: identity com
 #   session_idle_timeout: 1800
 audit_log: audit.jsonl
 
+# Ship each audit row to a SIEM as it is written (best-effort, off the hot path).
+# The local hash-chained log stays the system of record. URL/header values may
+# use ${ENV} so tokens stay out of the file.
+# audit_forward:
+#   http:
+#     url: "https://http-inputs.example.splunkcloud.com/services/collector/raw"
+#     headers: {Authorization: "Splunk ${HEC_TOKEN}"}
+#   # or, instead of http:
+#   # syslog: {host: siem.internal, port: 514, proto: udp}
+
 # What assistants show for this connector (name and logo in the connect dialog).
 # Advertised in the MCP handshake so a client (or the Glama inspector) can show a
 # newcomer what this is and what to try. Read by aggrete 0.5.4 and newer.

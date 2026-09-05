@@ -48,10 +48,11 @@ class Audit:
     JSON line. Prompts tell you what was asked; this tells you what was handed
     over, and proves the record has not been altered."""
 
-    def __init__(self, path: str | None):
+    def __init__(self, path: str | None, forward=None):
         self.path = path
         self.fh = open(path, "a") if path else None
         self.prev = _last_hash(path) if path else GENESIS
+        self.forward = forward   # optional Forwarder: ships each row to a SIEM
 
     def emit(self, **row):
         row["ts"] = time.time()
@@ -63,6 +64,8 @@ class Audit:
         if self.fh:
             self.fh.write(line + "\n")
             self.fh.flush()
+        if self.forward:
+            self.forward.send(row)
 
 
 def verify_chain(path: str) -> tuple[bool, int | None, int]:

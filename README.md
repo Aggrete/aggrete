@@ -44,7 +44,9 @@ Or clone this repo to get the demo, sample policy and Helm chart.
   fetching anything, and `scenarios` lists things to try. Both are answered by the
   proxy itself (disable with `builtin_tools: false`).
 - **Tamper-evident audit**: every decision is one hash-chained JSON line. Verify
-  with `aggrete-audit audit.jsonl` (breaks are reported by line number).
+  with `aggrete-audit audit.jsonl` (breaks are reported by line number). Optionally
+  forward each row to a SIEM (Splunk/Elastic/Datadog over HTTP, or syslog) as it is
+  written, off the hot path, with `audit_forward:`.
 - **Selective tool exposure**: walls and blocks in the policy hide tools from
   users who could never call them, so they are never listed.
 - **Output redaction**: `redact:` masks emails, SSNs, card numbers, API keys and

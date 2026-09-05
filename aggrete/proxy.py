@@ -604,7 +604,8 @@ async def main() -> None:
     cfg["_config_dir"] = str(root)
     engine = Engine(str(root / cfg.get("coc", "coc.yaml")), build_store(cfg.get("store")),
                     pack_state_path=cfg.get("pack_state"))
-    audit = Audit(cfg.get("audit_log"))
+    from .forward import build_forwarder
+    audit = Audit(cfg.get("audit_log"), forward=build_forwarder(cfg.get("audit_forward")))
     proxy = Proxy(cfg, engine, audit)
 
     brand = cfg.get("brand", {})
