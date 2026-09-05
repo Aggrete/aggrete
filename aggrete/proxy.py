@@ -40,6 +40,7 @@ from .entities import extract
 from .policy import Engine
 from .audit import Audit
 from .redact import rules_from_config, redact
+from . import integrity
 
 SEP = "__"
 # Tools that act on the world (write / egress). Override with `write_tools:` in config.
@@ -74,6 +75,11 @@ class Proxy:
         self.static_user = config.get("user", "unknown")
         self.identity_claim = (config.get("auth") or {}).get("identity_claim")
         self.redact_rules = rules_from_config(config.get("redact"))
+        # Tool integrity (rug-pull / poisoning). Off unless `tool_integrity:` is set.
+        self.integrity_cfg = config.get("tool_integrity") or {}
+        self.pins = integrity.PinStore(self.integrity_cfg.get("pins")) if self.integrity_cfg else None
+        self.tool_flags: dict[str, dict | None] = {}
+        self._integrity_audited: set[str] = set()
 
     @property
     def user(self) -> str:
@@ -106,6 +112,32 @@ class Proxy:
                 self.sessions[name] = session
             except Exception as e:  # a broken connector must not take the whole proxy down
                 print(f"aggrete: upstream {name!r} failed to connect, skipping it: {e}", file=sys.stderr)
+        if self.pins:
+            await self._scan_integrity()
+
+    async def _scan_integrity(self) -> None:
+        """Fingerprint and scan every upstream tool at startup, so a rug-pull or a
+        poisoned description is caught (and cached for call_tool) before anyone lists."""
+        for upstream, session in self.sessions.items():
+            try:
+                for t in (await session.list_tools()).tools:
+                    self._integrity_flag(f"{upstream}{SEP}{t.name}", t.description, t.input_schema)
+            except Exception as e:
+                print(f"aggrete: integrity scan of {upstream!r} failed: {e}", file=sys.stderr)
+
+    def _integrity_flag(self, name: str, description, input_schema) -> dict | None:
+        """Evaluate one tool's integrity, cache the verdict for call_tool, and audit
+        it once. Returns the flag ({action, reasons, fingerprint}) or None if clean."""
+        if not self.pins:
+            return None
+        flag = integrity.evaluate(name, description, input_schema, self.pins, self.integrity_cfg)
+        self.tool_flags[name] = flag
+        if flag and name not in self._integrity_audited:
+            self._integrity_audited.add(name)
+            self.audit.emit(user="-", tool=name, domain=self.domain_for(name), stage="integrity",
+                            write=False, decision=flag["action"], rule="tool-integrity",
+                            evidence={"reasons": flag["reasons"], "fingerprint": flag["fingerprint"][:16]})
+        return flag
 
     async def _connect_stdio(self, stack, spec):
         command = spec["command"]
@@ -145,11 +177,17 @@ class Proxy:
                     continue  # tool filtering: what is never listed is never called
                 if not self.engine.tool_visible(self.user, self.domain_for(name)):
                     continue  # selective exposure: walls and blocks hide tools per user
+                flag = self._integrity_flag(name, t.description, t.input_schema)
+                if flag and flag["action"] == "block":
+                    continue  # a rug-pulled or poisoned tool is hidden and never callable
+                description = f"[{self.domain_for(name)}] {t.description or ''}".strip()
+                if flag:  # alert: keep it listed, but flag it so the assistant is warned
+                    description = f"[integrity: {'; '.join(flag['reasons'])}] {description}"
                 tools.append(
                     types.Tool(
                         name=name,
                         title=t.title,
-                        description=f"[{self.domain_for(name)}] {t.description or ''}".strip(),
+                        description=description,
                         inputSchema=t.input_schema,
                     )
                 )
@@ -225,6 +263,15 @@ class Proxy:
 
         if not self._tool_allowed(name):
             return self._refuse(f"Tool {name} is not available through this gateway.")
+
+        flag = self.tool_flags.get(name)
+        if flag and flag["action"] == "block":
+            self.audit.emit(user=self.user, tool=name, domain=domain, stage="pre", write=False,
+                            decision="deny", rule="tool-integrity", evidence={"reasons": flag["reasons"]})
+            return self._refuse(
+                f"Tool {name} is blocked by tool integrity: {'; '.join(flag['reasons'])}. "
+                "A connector changed its tool definition since it was first seen, or the "
+                "description carries hidden instructions. Re-pin it deliberately if expected.")
 
         is_write = self._is_write(name)
         # --- Layer 3/4, before the fetch -----------------------------------

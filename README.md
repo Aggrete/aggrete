@@ -51,6 +51,10 @@ Or clone this repo to get the demo, sample policy and Helm chart.
   bearer tokens in results before they reach the model; hits are counted in the audit.
 - Holds the upstream credentials itself and never forwards the caller's token to
   an upstream (confused-deputy safe).
+- **Tool integrity:** fingerprints every upstream tool the first time it is seen
+  and flags any later change to its description or schema (a rug pull), and scans
+  descriptions for hidden instructions (tool poisoning). Alert or block, per
+  `tool_integrity:`. Deterministic, no model in the path.
 
 **Governing writes (egress).** A tool that acts on the world (create, update,
 upload, post, send, share) is classified as a write and governed as egress: any

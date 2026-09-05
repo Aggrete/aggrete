@@ -94,6 +94,17 @@ audit_entities: true    # record which people appeared in each result (needed fo
 # email, ssn, credit_card, aws_key, api_key, bearer, ip.
 redact: [email, ssn, credit_card, aws_key, api_key, bearer]
 
+# Tool integrity. Fingerprint every upstream tool the first time it is seen
+# (trust on first use, pins persisted to this file) and flag any later change to
+# its description or schema (a rug pull), plus scan descriptions for hidden
+# instructions (tool poisoning). `on_change`/`on_poison` are `alert` (listed but
+# audited) or `block` (hidden and refused). Remove this block to turn it off.
+tool_integrity:
+  pins: /tmp/aggrete-tool-pins.json
+  on_change: alert
+  on_poison: block
+  scan_poison: true
+
 upstreams:
   hr:
     command: python3
