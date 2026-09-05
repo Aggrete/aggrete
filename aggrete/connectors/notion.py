@@ -21,8 +21,10 @@ from __future__ import annotations
 import argparse
 import json
 import re
+from typing import Annotated
 
 import httpx2 as httpx
+from pydantic import Field
 
 from aggrete.connectors.base import Connector
 
@@ -124,8 +126,15 @@ def build(notion: Notion, db_ids: list[str], writable: bool = False) -> Connecto
     c = Connector("notion")
     wanted = [(did, notion.db_title(did)) for did in db_ids]
 
-    @c.read("databases", "List the Notion databases you can read here. Call this first when asked about Notion.")
+    @c.read("databases", (
+        "List the Notion databases exposed here, with the search, read and (when writing is enabled) create-page tool name "
+        "for each one. Call this first when asked about Notion, so you know which database-scoped tool to use next. Takes no "
+        "arguments."))
     def databases_tool() -> str:
+        """Directory of the available databases and their per-database tool names.
+
+        Returns JSON: {notion_databases: [{database, search_tool, read_tool, create_page_tool?}]}.
+        """
         out = []
         for did, title in wanted:
             s = slug(title) if title else slug(did)[:12]
@@ -138,26 +147,48 @@ def build(notion: Notion, db_ids: list[str], writable: bool = False) -> Connecto
         label = title or db_id
 
         def make(db_id=db_id, title=title):
-            def search(query: str = "") -> str:
+            def search(
+                query: Annotated[str, Field(default="", description="Keyword to match in page titles (case-insensitive); leave empty to list recent pages in the database.")] = "",
+            ) -> str:
+                """Pages in this database whose title matches, each with creator and last-editor email.
+
+                Returns JSON: {database, results: [{database, id, title, url, created_by_email, last_edited_by_email}]}.
+                """
                 pages = notion.query(db_id, query)
                 return json.dumps({"database": title or db_id,
                                    "results": [notion.page_record(title or db_id, p) for p in pages]})
 
-            def read(page_id: str) -> str:
+            def read(
+                page_id: Annotated[str, Field(description="Notion page id to read, as returned in the 'id' field of a search result from this database.")],
+            ) -> str:
+                """One page's title, url and body text by its page id.
+
+                Returns JSON: {database, page: {id, title, url, text}}.
+                """
                 return json.dumps({"database": title or db_id, "page": notion.read_page(page_id)})
 
             return search, read
 
         search, read = make()
-        c.read(f"search_{s}", f"Search pages in the Notion database {label} by title keyword; leave the query empty to list recent pages.")(search)
-        c.read(f"read_{s}", f"Read one page from the Notion database {label} by its page_id (metadata plus text).")(read)
+        c.read(f"search_{s}", (
+            f"Search pages in the Notion database {label} by title keyword. The search is fenced to the {label} database, and each hit "
+            f"carries its creator and last-editor. Leave the query empty to list recent pages."))(search)
+        c.read(f"read_{s}", (
+            f"Read one page from the Notion database {label} by its page_id, returned as metadata plus the page's text. Fenced to the "
+            f"{label} database."))(read)
         if writable:
             def make_create(db_id=db_id, title=title):
-                def create_page(title_: str, content: str = "") -> str:
+                def create_page(
+                    title_: Annotated[str, Field(description="Title for the new page (its Name property).")],
+                    content: Annotated[str, Field(default="", description="Plain-text body added as a paragraph block; may be empty.")] = "",
+                ) -> str:
+                    """Create one page in this database. Returns JSON: {database, created_page, url}."""
                     made = notion.create_page(db_id, title_, content)
                     return json.dumps({"database": title or db_id, "created_page": made.get("id"), "url": made.get("url")})
                 return create_page
-            c.write(f"create_page_{s}", f"Create a page in the Notion database {label}. Provide a title and content.")(make_create())
+            c.write(f"create_page_{s}", (
+                f"Create a page in the Notion database {label} from a title and content. The page is created only in the {label} database, "
+                f"and the proxy governs this call as an egress/write. Provide a title and content."))(make_create())
     return c
 
 

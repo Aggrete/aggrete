@@ -20,8 +20,10 @@ import argparse
 import base64
 import json
 import re
+from typing import Annotated
 
 import httpx2 as httpx
+from pydantic import Field
 
 from aggrete.connectors.base import Connector
 
@@ -95,8 +97,15 @@ def build(gh: GitHub, repos: list[str], writable: bool = False) -> Connector:
     c = Connector("github")
     wanted = [r for r in repos if gh.repo_exists(r)]
 
-    @c.read("repos", "List the GitHub repositories you can read here. Call this first when asked about GitHub.")
+    @c.read("repos", (
+        "List the GitHub repositories exposed here, with the search, read and (when writing is enabled) create-issue "
+        "tool name for each one. Call this first when asked about GitHub, so you know which repo-scoped tool to use "
+        "next. Takes no arguments."))
     def repos_tool() -> str:
+        """Directory of the available repositories and their per-repo tool names.
+
+        Returns JSON: {github_repos: [{repo, search_tool, read_tool, create_issue_tool?}]}.
+        """
         return json.dumps({"github_repos": [
             dict({"repo": r, "search_tool": f"search_{slug(r)}", "read_tool": f"read_{slug(r)}"},
                  **({"create_issue_tool": f"create_issue_{slug(r)}"} if writable else {})) for r in wanted]})
@@ -105,11 +114,24 @@ def build(gh: GitHub, repos: list[str], writable: bool = False) -> Connector:
         s = slug(repo)
 
         def make(repo=repo):
-            def search(query: str = "") -> str:
+            def search(
+                query: Annotated[str, Field(default="", description="Keyword to match in issues and pull requests; leave empty to list the most recent items in the repo.")] = "",
+            ) -> str:
+                """Issues and pull requests matching the query, each with its author login.
+
+                Returns JSON: {repo, results: [{repo, number, title, state, kind, user_id, author_login, email}]}.
+                """
                 items = gh.search_issues(repo, query) if query.strip() else gh.list_issues(repo)
                 return json.dumps({"repo": repo, "results": [gh.issue_record(repo, it) for it in items]})
 
-            def read(issue_number: str = "", path: str = "") -> str:
+            def read(
+                issue_number: Annotated[str, Field(default="", description="Issue or pull-request number to read, for example '42'. Give this or 'path'.")] = "",
+                path: Annotated[str, Field(default="", description="Repository file path to read, for example 'docs/SECURITY.md'. Give this or 'issue_number'.")] = "",
+            ) -> str:
+                """One issue/PR (with its body) or one file's text, fenced to this repo.
+
+                Returns JSON: {repo, issue: {...}} or {repo, file: {path, name, text}}.
+                """
                 if path:
                     return json.dumps({"repo": repo, "file": gh.read_file(repo, path)})
                 if issue_number:
@@ -122,15 +144,25 @@ def build(gh: GitHub, repos: list[str], writable: bool = False) -> Connector:
             return search, read
 
         search, read = make()
-        c.read(f"search_{s}", f"Search issues and pull requests in the GitHub repo {repo} by keyword; leave the query empty to list recent ones.")(search)
-        c.read(f"read_{s}", f"Read one item from the GitHub repo {repo}: pass issue_number for an issue/PR, or path to read a file.")(read)
+        c.read(f"search_{s}", (
+            f"Search issues and pull requests in the GitHub repo {repo} by keyword. The search is fenced to {repo}, and each "
+            f"hit carries its author login. Leave the query empty to list recent issues and PRs."))(search)
+        c.read(f"read_{s}", (
+            f"Read one item from the GitHub repo {repo}: pass issue_number for an issue or pull request (returned with its body), "
+            f"or pass path to read a file's text. Fenced to {repo}."))(read)
         if writable:
             def make_create(repo=repo):
-                def create_issue(title: str, body: str = "") -> str:
+                def create_issue(
+                    title: Annotated[str, Field(description="Title for the new issue.")],
+                    body: Annotated[str, Field(default="", description="Markdown body of the new issue; may be empty.")] = "",
+                ) -> str:
+                    """Open one issue in this repo. Returns JSON: {repo, created_issue, url}."""
                     made = gh.create_issue(repo, title, body)
                     return json.dumps({"repo": repo, "created_issue": made.get("number"), "url": made.get("html_url")})
                 return create_issue
-            c.write(f"create_issue_{s}", f"Create an issue in the GitHub repo {repo}. Provide a title and body.")(make_create())
+            c.write(f"create_issue_{s}", (
+                f"Create an issue in the GitHub repo {repo} from a title and body. The issue is opened only in {repo}, and the "
+                f"proxy governs this call as an egress/write. Provide a title and body."))(make_create())
     return c
 
 

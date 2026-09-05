@@ -21,8 +21,10 @@ from __future__ import annotations
 import argparse
 import json
 import re
+from typing import Annotated
 
 import httpx2 as httpx
+from pydantic import Field
 
 from aggrete.connectors.base import Connector
 
@@ -97,8 +99,15 @@ def build(slack: Slack, channel_names: list[str], writable: bool = False) -> Con
     live = {ch["name"]: ch["id"] for ch in slack.channels()}
     wanted = [(n, live[n]) for n in channel_names if n in live]
 
-    @c.read("channels", "List the Slack channels you can read here. Call this first when asked about Slack.")
+    @c.read("channels", (
+        "List the Slack channels exposed here, with the search, read and (when writing is enabled) post tool "
+        "name for each one. Call this first when asked about Slack, so you know which channel-scoped tool to use "
+        "next. Takes no arguments."))
     def channels_tool() -> str:
+        """Directory of the available Slack channels and their per-channel tool names.
+
+        Returns JSON: {slack_channels: [{name, search_tool, read_tool, post_tool?}]}.
+        """
         return json.dumps({"slack_channels": [
             dict({"name": n, "search_tool": f"search_{slug(n)}", "read_tool": f"read_{slug(n)}"},
                  **({"post_tool": f"post_{slug(n)}"} if writable else {})) for n, _ in wanted]})
@@ -107,14 +116,26 @@ def build(slack: Slack, channel_names: list[str], writable: bool = False) -> Con
         s = slug(name)
 
         def make(cid=cid, name=name):
-            def search(query: str = "") -> str:
+            def search(
+                query: Annotated[str, Field(default="", description="Keyword to match in message text (case-insensitive); leave empty to list the most recent messages in the channel.")] = "",
+            ) -> str:
+                """Recent messages in this channel matching the query, each with author id and email.
+
+                Returns JSON: {channel, messages: [{ts, channel, text, slack_user_id, user_email}]}.
+                """
                 msgs = slack.history(cid, 100)
                 if query.strip():
                     q = query.lower()
                     msgs = [m for m in msgs if q in (m.get("text", "").lower())]
                 return json.dumps({"channel": name, "messages": [slack.message_record(name, m) for m in msgs[:30]]})
 
-            def read(ts: str = "") -> str:
+            def read(
+                ts: Annotated[str, Field(default="", description="Message timestamp id (the 'ts' field of a search result, for example '1719000000.001200'); leave empty to read the latest message.")] = "",
+            ) -> str:
+                """One message by its timestamp (or the latest), with author id and email.
+
+                Returns JSON: {channel, message: {ts, channel, text, slack_user_id, user_email}}.
+                """
                 msgs = slack.history(cid, 100)
                 hit = next((m for m in msgs if m.get("ts") == ts), None) if ts else (msgs[0] if msgs else None)
                 return json.dumps({"channel": name, "message": slack.message_record(name, hit) if hit else None})
@@ -122,15 +143,24 @@ def build(slack: Slack, channel_names: list[str], writable: bool = False) -> Con
             return search, read
 
         search, read = make()
-        c.read(f"search_{s}", f"Search recent messages in the Slack channel #{name} by keyword; leave the query empty to list recent messages.")(search)
-        c.read(f"read_{s}", f"Read one message from the Slack channel #{name} by its timestamp (ts).")(read)
+        c.read(f"search_{s}", (
+            f"Search recent messages in the Slack channel #{name} by keyword. The search is fenced to #{name}, and each "
+            f"hit carries the author's Slack user id and, when resolvable, email. Leave the query empty to list recent messages."))(search)
+        c.read(f"read_{s}", (
+            f"Read one message from the Slack channel #{name} by its timestamp (ts), or the latest message when ts is omitted. "
+            f"Fenced to #{name}; the result carries the author's Slack user id and email when resolvable."))(read)
         if writable:
             def make_post(cid=cid, name=name):
-                def post(text: str) -> str:
+                def post(
+                    text: Annotated[str, Field(description="Message text to post to the channel.")],
+                ) -> str:
+                    """Post one message to this channel. Returns JSON: {channel, posted_ts}."""
                     d = slack.post(cid, text)
                     return json.dumps({"channel": name, "posted_ts": d.get("ts")})
                 return post
-            c.write(f"post_{s}", f"Post a message to the Slack channel #{name}.")(make_post())
+            c.write(f"post_{s}", (
+                f"Post a message to the Slack channel #{name}. The message is written only to #{name}, and the proxy governs "
+                f"this call as an egress/write. Provide the message text."))(make_post())
     return c
 
 

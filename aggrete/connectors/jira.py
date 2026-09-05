@@ -20,8 +20,10 @@ from __future__ import annotations
 import argparse
 import json
 import re
+from typing import Annotated
 
 import httpx2 as httpx
+from pydantic import Field
 
 from aggrete.connectors.base import Connector
 
@@ -114,8 +116,15 @@ def build(jira: Jira, project_keys: list[str], writable: bool = False) -> Connec
     c = Connector("jira")
     wanted = [k for k in project_keys if jira.project_exists(k)]
 
-    @c.read("projects", "List the Jira projects you can read here. Call this first when asked about Jira.")
+    @c.read("projects", (
+        "List the Jira projects exposed here, with the search, read and (when writing is enabled) create-issue tool "
+        "name for each one. Call this first when asked about Jira, so you know which project-scoped tool to use next. "
+        "Takes no arguments."))
     def projects_tool() -> str:
+        """Directory of the available projects and their per-project tool names.
+
+        Returns JSON: {jira_projects: [{project, search_tool, read_tool, create_issue_tool?}]}.
+        """
         return json.dumps({"jira_projects": [
             dict({"project": k, "search_tool": f"search_{slug(k)}", "read_tool": f"read_{slug(k)}"},
                  **({"create_issue_tool": f"create_issue_{slug(k)}"} if writable else {})) for k in wanted]})
@@ -124,11 +133,23 @@ def build(jira: Jira, project_keys: list[str], writable: bool = False) -> Connec
         s = slug(key)
 
         def make(key=key):
-            def search(query: str = "") -> str:
+            def search(
+                query: Annotated[str, Field(default="", description="Text to match across issues in the project (Jira 'text ~' search); leave empty to list the most recently updated issues.")] = "",
+            ) -> str:
+                """Issues in this project matching the query, each with reporter and assignee.
+
+                Returns JSON: {project, results: [{project, key, summary, status, reporter_email, assignee_email, ...}]}.
+                """
                 issues = jira.search(key, query)
                 return json.dumps({"project": key, "results": [jira.issue_record(key, it) for it in issues]})
 
-            def read(issue_key: str = "") -> str:
+            def read(
+                issue_key: Annotated[str, Field(default="", description="Full issue key to read, including the project prefix, for example 'LEGAL-123'.")] = "",
+            ) -> str:
+                """One issue with its description text, plus reporter and assignee.
+
+                Returns JSON: {project, issue: {project, key, summary, status, description, reporter_email, assignee_email, ...}}.
+                """
                 if not issue_key:
                     return json.dumps({"project": key, "error": "give an issue_key (e.g. LEGAL-123)"})
                 return json.dumps({"project": key, "issue": jira.read_issue(key, issue_key)})
@@ -136,15 +157,25 @@ def build(jira: Jira, project_keys: list[str], writable: bool = False) -> Connec
             return search, read
 
         search, read = make()
-        c.read(f"search_{s}", f"Search issues in the Jira project {key} by keyword; leave the query empty to list recently updated ones.")(search)
-        c.read(f"read_{s}", f"Read one issue from the Jira project {key} by its issue_key (e.g. {key}-123).")(read)
+        c.read(f"search_{s}", (
+            f"Search issues in the Jira project {key} by keyword. The search is fenced to project {key}, and each hit carries its "
+            f"reporter and assignee. Leave the query empty to list recently updated issues."))(search)
+        c.read(f"read_{s}", (
+            f"Read one issue from the Jira project {key} by its issue_key (for example {key}-123), returned with its description text, "
+            f"reporter and assignee. Fenced to project {key}."))(read)
         if writable:
             def make_create(key=key):
-                def create_issue(summary: str, description: str = "") -> str:
+                def create_issue(
+                    summary: Annotated[str, Field(description="One-line summary (title) for the new issue.")],
+                    description: Annotated[str, Field(default="", description="Body text of the new issue; may be empty.")] = "",
+                ) -> str:
+                    """Create one Task issue in this project. Returns JSON: {project, created_issue, url}."""
                     made = jira.create_issue(key, summary, description)
                     return json.dumps({"project": key, "created_issue": made.get("key"), "url": made.get("self")})
                 return create_issue
-            c.write(f"create_issue_{s}", f"Create an issue in the Jira project {key}. Provide a summary and description.")(make_create())
+            c.write(f"create_issue_{s}", (
+                f"Create an issue in the Jira project {key} from a summary and description. The issue is opened only in project {key}, "
+                f"and the proxy governs this call as an egress/write. Provide a summary and description."))(make_create())
     return c
 
 

@@ -24,10 +24,12 @@ import os
 import re
 import time
 from pathlib import Path
+from typing import Annotated
 
 import httpx2 as httpx
 import jwt
 from mcp.server.mcpserver import MCPServer
+from pydantic import Field
 
 __version__ = "0.2.0"
 TARGET_API = "v3"
@@ -161,15 +163,29 @@ def build(drive: Drive, root_name: str, impersonate: bool = False) -> MCPServer:
         return server
     folders = drive.subfolders(root["id"]) or [root]
 
-    @server.tool(name="folders", description="List the Google Drive folders you can search here. Call this first when asked about documents, files or anything in Google Drive.")
+    @server.tool(name="folders", description=(
+        "List the Google Drive folders exposed here, with the search, read and (when writing is enabled) "
+        "create tool name for each one. Call this first when asked about documents, files or anything in "
+        "Google Drive, so you know which folder-scoped tool to use next. Takes no arguments."))
     def folders_tool() -> str:
+        """Directory of the available Drive folders and their per-folder tool names.
+
+        Returns JSON: {drive_folders: [{name, search_tool, read_tool, create_tool?}]}.
+        """
         return json.dumps({"drive_folders": [dict({"name": f["name"], "search_tool": f"search_{slug(f['name'])}", "read_tool": f"read_{slug(f['name'])}"}, **({"create_tool": f"create_{slug(f['name'])}"} if drive.writable else {})) for f in folders]})
 
     for f in folders:
         s = slug(f["name"]); fid = f["id"]; label = f["name"]
 
         def make(fid=fid, label=label):
-            def search(query: str = "", _acting_user: str = "") -> str:
+            def search(
+                query: Annotated[str, Field(default="", description="Words to match in a document's title or full text; leave empty to list every file in the folder.")] = "",
+                _acting_user: Annotated[str, Field(default="", description="Internal: email of the calling user for domain-wide-delegation impersonation, injected by the proxy. Leave empty.")] = "",
+            ) -> str:
+                """Files in this folder matching the query, each with owner and last-editor email.
+
+                Returns JSON: {folder, files: [{id, name, type, modified, owner_email, editor_email, link}]}.
+                """
                 if impersonate and _acting_user:
                     drive.set_subject(_acting_user)
                 return json.dumps({"folder": label, "files": [
@@ -177,7 +193,14 @@ def build(drive: Drive, root_name: str, impersonate: bool = False) -> MCPServer:
                      "owner_email": (x.get("owners") or [{}])[0].get("emailAddress"),
                      "editor_email": (x.get("lastModifyingUser") or {}).get("emailAddress"), "link": x.get("webViewLink")}
                     for x in drive.search(fid, query)]})
-            def read(file_id: str, _acting_user: str = "") -> str:
+            def read(
+                file_id: Annotated[str, Field(description="Drive file id to read, as returned in the 'id' field of a search result from this same folder.")],
+                _acting_user: Annotated[str, Field(default="", description="Internal: email of the calling user for domain-wide-delegation impersonation, injected by the proxy. Leave empty.")] = "",
+            ) -> str:
+                """Full text and metadata of one file, fenced to this folder (a file outside it is refused).
+
+                Returns JSON: {folder, name, owner_email, editor_email, text}.
+                """
                 if impersonate and _acting_user:
                     drive.set_subject(_acting_user)
                 meta, text = drive.read(file_id, fid)
@@ -186,20 +209,31 @@ def build(drive: Drive, root_name: str, impersonate: bool = False) -> MCPServer:
             return search, read
 
         search, read = make()
-        sdesc = f"Search Google Drive for documents in the '{label}' folder, by words in the title or full text. Use this to look for {label.lower()} in Drive; leave the query empty to list everything in the folder."
-        rdesc = f"Read a Google Drive document from the '{label}' folder (Docs, Sheets and Slides come back as text)."
+        sdesc = (f"Search Google Drive for documents in the '{label}' folder, by words in the title or full text. "
+                 f"The search is fenced to '{label}' and its subfolders, and each hit carries the owner and last-editor email. "
+                 f"Leave the query empty to list everything in the folder.")
+        rdesc = (f"Read the full text and metadata of one document in the '{label}' Google Drive folder, by its file id "
+                 f"(Docs, Sheets and Slides are exported as text). The read is fenced to '{label}': a file outside this "
+                 f"folder is refused.")
         server.tool(name=f"search_{s}", description=sdesc)(search)
         server.tool(name=f"read_{s}", description=rdesc)(read)
         if drive.writable:
             def make_create(fid=fid, label=label):
-                def create(name: str, content: str, _acting_user: str = "") -> str:
+                def create(
+                    name: Annotated[str, Field(description="File name for the new document, for example 'Q4 summary.txt'.")],
+                    content: Annotated[str, Field(description="Plain-text body of the document to create.")],
+                    _acting_user: Annotated[str, Field(default="", description="Internal: email of the calling user for domain-wide-delegation impersonation, injected by the proxy. Leave empty.")] = "",
+                ) -> str:
+                    """Create one text document inside this folder. Returns JSON: {folder, created, id, link}."""
                     if impersonate and _acting_user:
                         drive.set_subject(_acting_user)
                     made = drive.create(fid, name, content)
                     return json.dumps({"folder": label, "created": made.get("name"),
                                        "id": made.get("id"), "link": made.get("webViewLink")})
                 return create
-            cdesc = f"Create a text document in the '{label}' Google Drive folder. Provide a file name and its content."
+            cdesc = (f"Create a text document in the '{label}' Google Drive folder from a file name and its content. "
+                     f"The new file is fenced to '{label}', and the proxy governs this call as an egress/write. "
+                     f"Provide a file name and its content.")
             server.tool(name=f"create_{s}", description=cdesc)(make_create())
     return server
 

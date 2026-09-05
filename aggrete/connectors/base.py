@@ -7,16 +7,36 @@ governed as a write/egress (blocked after untrusted reads, subject to
 ``applies: write`` rules). So the whole job of a connector is: expose read
 tools, and optionally write tools named with a write verb.
 
+    from typing import Annotated
+
+    from pydantic import Field
+
     from aggrete.connectors.base import Connector
 
     c = Connector("crm")
 
-    @c.read("search_accounts", "Search CRM accounts by name.")
-    def search(query: str) -> str:
+    # Give each tool a 2-3 sentence description (what it does, what boundary it
+    # is fenced to, and for writes that the proxy governs it as egress), and
+    # annotate every parameter so its description lands in the tool's inputSchema.
+
+    @c.read("search_accounts", (
+        "Search CRM accounts by name within this workspace. Returns matching accounts "
+        "with the owner's email, so the policy can count people. Leave the query empty "
+        "to list recent accounts."))
+    def search(
+        query: Annotated[str, Field(default="", description="Text to match against account names; empty lists recent accounts.")] = "",
+    ) -> str:
+        # Matching accounts. Returns JSON: {results: [{id, name, owner_email}]}.
         ...
 
-    @c.write("create_note", "Create a note on an account.")
-    def create(account_id: str, text: str) -> str:
+    @c.write("create_note", (
+        "Create a note on one CRM account, fenced to this workspace. The proxy governs "
+        "this call as an egress/write. Provide the account id and the note text."))
+    def create(
+        account_id: Annotated[str, Field(description="Id of the account to attach the note to.")],
+        text: Annotated[str, Field(description="Body text of the note.")],
+    ) -> str:
+        # Create a note. Returns JSON: {created_id}.
         ...
 
     if __name__ == "__main__":

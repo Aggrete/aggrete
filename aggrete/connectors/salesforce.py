@@ -22,8 +22,10 @@ from __future__ import annotations
 import argparse
 import json
 import re
+from typing import Annotated
 
 import httpx2 as httpx
+from pydantic import Field
 
 from aggrete.connectors.base import Connector
 
@@ -94,8 +96,15 @@ def build(sf: Salesforce, objects: list[str], writable: bool = False) -> Connect
     c = Connector("salesforce")
     wanted = [o for o in objects if sf.object_exists(o)]
 
-    @c.read("objects", "List the Salesforce objects you can read here. Call this first when asked about Salesforce.")
+    @c.read("objects", (
+        "List the Salesforce objects (sObjects) exposed here, with the search, read and (when writing is enabled) create "
+        "tool name for each one. Call this first when asked about Salesforce, so you know which object-scoped tool to use "
+        "next. Takes no arguments."))
     def objects_tool() -> str:
+        """Directory of the available sObjects and their per-object tool names.
+
+        Returns JSON: {salesforce_objects: [{object, search_tool, read_tool, create_tool?}]}.
+        """
         return json.dumps({"salesforce_objects": [
             dict({"object": o, "search_tool": f"search_{slug(o)}", "read_tool": f"read_{slug(o)}"},
                  **({"create_tool": f"create_{slug(o)}"} if writable else {})) for o in wanted]})
@@ -104,27 +113,49 @@ def build(sf: Salesforce, objects: list[str], writable: bool = False) -> Connect
         s = slug(obj)
 
         def make(obj=obj):
-            def search(query: str = "") -> str:
+            def search(
+                query: Annotated[str, Field(default="", description="Text to match against the record Name (SOQL LIKE); leave empty to list records of this object (up to 50).")] = "",
+            ) -> str:
+                """Records of this object matching the query, each with an identifiable person's email.
+
+                Returns JSON: {object, results: [{object, id, name, email, owner_email}]}.
+                """
                 return json.dumps({"object": obj, "results": sf.search(obj, query)})
 
-            def read(record_id: str) -> str:
+            def read(
+                record_id: Annotated[str, Field(description="Salesforce record id to read (15 or 18 characters), as returned in the 'id' field of a search result for this object.")],
+            ) -> str:
+                """One record of this object by id, normalized to a person-bearing record.
+
+                Returns JSON: {object, record: {object, id, name, email, owner_email}}.
+                """
                 r = sf.read(obj, record_id)
                 return json.dumps({"object": obj, "record": Salesforce.record(obj, r)})
 
             return search, read
 
         search, read = make()
-        c.read(f"search_{s}", f"Search records of the Salesforce object {obj} by name; leave the query empty to list recent records.")(search)
-        c.read(f"read_{s}", f"Read one record from the Salesforce object {obj} by its record_id.")(read)
+        c.read(f"search_{s}", (
+            f"Search records of the Salesforce object {obj} by name. The search is fenced to the {obj} object, and each record "
+            f"carries an identifiable person (the record's own email, else its owner's). Leave the query empty to list records."))(search)
+        c.read(f"read_{s}", (
+            f"Read one record from the Salesforce object {obj} by its record_id, normalized to id, name and a person's email. "
+            f"Fenced to the {obj} object."))(read)
         if writable:
             def make_create(obj=obj):
-                def create(name: str, fields: dict | None = None) -> str:
+                def create(
+                    name: Annotated[str, Field(description="Value for the record's Name field on the new record.")],
+                    fields: Annotated[dict | None, Field(default=None, description="Optional extra sObject fields as a name-to-value mapping, for example {'Company': 'Acme'}; Name is set from the 'name' argument.")] = None,
+                ) -> str:
+                    """Create one record of this object. Returns JSON: {object, created_id, success}."""
                     body = dict(fields or {})
                     body.setdefault("Name", name)
                     made = sf.create(obj, body)
                     return json.dumps({"object": obj, "created_id": made.get("id"), "success": made.get("success")})
                 return create
-            c.write(f"create_{s}", f"Create a record of the Salesforce object {obj}. Provide a name and optional fields.")(make_create())
+            c.write(f"create_{s}", (
+                f"Create a record of the Salesforce object {obj} from a name and optional fields. The record is created only on the "
+                f"{obj} object, and the proxy governs this call as an egress/write. Provide a name and optional fields."))(make_create())
     return c
 
 
