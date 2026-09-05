@@ -134,6 +134,11 @@ CI fails any rule without both an allow and a deny test. Clauses that compile to
 nothing are worth finding. Those are the parts of your code of conduct that were
 never enforceable.
 
+`aggrete-lint coc.yaml --config proxy.config.yaml` catches the fail-open cases the
+tests do not: a high-severity rule that only alerts, a wall whose `until` date has
+passed, an enforce block missing a required field, and rules whose domains no tool
+is mapped to (so the rule can never fire). It exits non-zero on errors, for CI.
+
 Rule types: `domain_join`, `entity_budget`, `domain_block`, `self_comparison`,
 `min_group` (a result about fewer than k people is one person's data; pay
 transparency), `wall` (a domain open only to `allowed_users`, or closed to

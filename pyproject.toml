@@ -36,6 +36,7 @@ dev = ["pytest", "redis>=5", "anthropic>=1.0"]
 aggrete = "aggrete.proxy:cli"
 aggrete-ingest = "aggrete.ingest:main"
 aggrete-audit = "aggrete.audit:main"
+aggrete-lint = "aggrete.lint:cli"
 
 [project.urls]
 Homepage = "https://aggrete.com"
