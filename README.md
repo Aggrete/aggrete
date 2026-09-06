@@ -53,6 +53,11 @@ Or clone this repo to get the demo, sample policy and Helm chart.
   bearer tokens in results before they reach the model; hits are counted in the audit.
 - Holds the upstream credentials itself and never forwards the caller's token to
   an upstream (confused-deputy safe).
+- **On-behalf-of credentials:** mark an upstream `per_user: true` and each caller
+  reaches it with their *own* resolved credential (from a pluggable vault or
+  token-exchange hook), so a person's individual access is carried end to end
+  instead of everyone sharing one master token. The upstream sees Sam, not a
+  shared robot account.
 - **Tool integrity:** fingerprints every upstream tool the first time it is seen
   and flags any later change to its description or schema (a rug pull), and scans
   descriptions for hidden instructions (tool poisoning). Alert or block, per
@@ -254,6 +259,39 @@ history. Which is the point.
 Register it in a client as a remote MCP server at `https://<host>/mcp` with
 the bearer token your IdP issues; keep the connectors themselves reachable
 only from the Aggrete host.
+
+## Per-user access (on-behalf-of)
+
+By default the proxy holds one credential per upstream and every caller shares
+it. Mark an upstream `per_user: true` and each caller instead reaches it with
+their *own* credential, resolved per request, so the upstream sees the actual
+person and their individual permissions, not a shared robot account. The proxy
+still never puts the caller's own token on the wire; it resolves a separate
+credential through a hook you control.
+
+```yaml
+upstreams:
+  drive:
+    command: python3
+    args: [-m, aggrete.connectors.drive, --credentials, /opt/aggrete/sa.json, --root, Northwind]
+    per_user: true
+    obo:
+      # Your vault or token-exchange script. Run per (user, upstream) with
+      # AGGRETE_USER and AGGRETE_UPSTREAM in the environment; print JSON:
+      #   {"env": {"GOOGLE_DELEGATED_USER": "sam@corp"}, "headers": {...}}
+      command: [/opt/aggrete/obo.sh]
+      # ...or map users statically instead of a command:
+      # users:
+      #   sam@corp: {env: {GOOGLE_DELEGATED_USER: sam@corp}}
+```
+
+The resolved `env` is merged into a stdio connector's environment; `headers` are
+merged into an HTTP upstream's request headers (the per-user value wins). With no
+`obo` block, a `per_user` upstream defaults to passing the identity as
+`AGGRETE_ACTING_USER`, so a delegation-aware connector can act as them. A per-user
+upstream opens a fresh connection per call for isolation (connection pooling is a
+planned optimization); shared upstreams keep the one long-lived session. Every
+decision still records who the call acted as.
 
 ## Inside a gateway you already run
 

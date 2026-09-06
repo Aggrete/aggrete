@@ -135,8 +135,6 @@ These already work in the open-source proxy today.
   *Under the hood:* `aggrete-lint` static-checks `coc.yaml` for fail-open configs
   and unreachable rules; exits non-zero on errors, for CI.
 
-## Next (in progress)
-
 - **Each person's own permissions follow them all the way through.**
   Instead of everyone sharing one master account to reach a system, each person's
   individual access is carried end to end, so the record shows exactly who did
@@ -144,11 +142,14 @@ These already work in the open-source proxy today.
   *For example:* when Sam's assistant opens a file, the HR system sees "Sam," not a
   generic shared robot account. Sam can only reach what Sam is allowed to, and the
   logbook names Sam.
-  *Under the hood:* per-user, on-behalf-of credentials to upstreams with a
-  pluggable credential store / vault. The single loudest community ask
+  *Under the hood:* mark an upstream `per_user: true` and each caller reaches it
+  with their own credential, resolved per request through a pluggable hook (a
+  vault or token-exchange script), `obo:`. The single loudest community ask
   ([agentgateway#239](https://github.com/agentgateway/agentgateway/issues/239),
-  [mcp#804](https://github.com/modelcontextprotocol/modelcontextprotocol/discussions/804)),
-  and this project's biggest current gap.
+  [mcp#804](https://github.com/modelcontextprotocol/modelcontextprotocol/discussions/804)).
+  Connection pooling for per-user sessions is the next optimization.
+
+## Next (in progress)
 
 - **Rules that look at the details of a request, not just its type.**
   Whether something is allowed can depend on the specifics, not only the kind of

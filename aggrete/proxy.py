@@ -41,7 +41,7 @@ from .policy import Engine
 from .audit import Audit
 from .redact import rules_from_config, redact, BUILTIN as REDACT_BUILTIN
 from .accumulator import RedisStore
-from . import integrity, ratelimit
+from . import integrity, ratelimit, credentials
 
 # Inbound scan default: credential-shaped patterns only, so a legitimate email or
 # id in an argument is not mistaken for a secret. Override with `scan_inbound:`.
@@ -152,34 +152,72 @@ class Proxy:
                             evidence={"reasons": flag["reasons"], "fingerprint": flag["fingerprint"][:16]})
         return flag
 
-    async def _connect_stdio(self, stack, spec):
+    def _stdio_params(self, spec: dict, extra_env: dict | None = None) -> StdioServerParameters:
+        """Build the stdio spawn parameters. `extra_env` carries a per-user
+        on-behalf-of credential (from credentials.resolve) when present."""
         command = spec["command"]
         # Use the interpreter running the proxy, so a venv's deps resolve
         # for locally-spawned Python servers without hardcoding paths.
         if command in ("python", "python3"):
             command = sys.executable
         # Inherit the proxy's environment (certs, PATH, etc.) so a connector runs
-        # the same way it does from the shell, plus any per-upstream overrides.
-        params = StdioServerParameters(
+        # the same way it does from the shell, plus any per-upstream overrides,
+        # plus the per-user credential last so it wins.
+        return StdioServerParameters(
             command=command, args=spec.get("args", []),
-            env={**os.environ, **(spec.get("env") or {})},
+            env={**os.environ, **(spec.get("env") or {}), **(extra_env or {})},
         )
-        return await stack.enter_async_context(stdio_client(params))
 
-    async def _connect_http(self, stack, spec):
+    async def _connect_stdio(self, stack, spec, extra_env: dict | None = None):
+        return await stack.enter_async_context(stdio_client(self._stdio_params(spec, extra_env)))
+
+    def _http_headers(self, spec: dict, extra_headers: dict | None = None) -> dict:
+        """Header set for an HTTP upstream; `extra_headers` is the per-user
+        on-behalf-of credential when present (it wins over the shared header)."""
+        headers = {k: expand_env(str(v)) for k, v in (spec.get("headers") or {}).items()}
+        headers.update(extra_headers or {})
+        return headers
+
+    async def _connect_http(self, stack, spec, extra_headers: dict | None = None):
         """Remote connector over streamable HTTP.
 
         `headers` values may reference ${ENV_VARS}, so a bearer token for the
         upstream lives in the proxy's environment, never in the YAML. This is
         the proxy's own credential to the connector; the end user never holds
-        it, which is what makes the proxy un-bypassable.
+        it, which is what makes the proxy un-bypassable. `extra_headers` carries
+        a per-user on-behalf-of credential when present.
         """
-        headers = {k: expand_env(str(v)) for k, v in (spec.get("headers") or {}).items()}
+        headers = self._http_headers(spec, extra_headers)
         client = create_mcp_http_client(headers=headers or None)
         await stack.enter_async_context(client)
         return await stack.enter_async_context(
             streamable_http_client(expand_env(spec["url"]), http_client=client)
         )
+
+    @contextlib.asynccontextmanager
+    async def _upstream_session(self, user: str, upstream: str):
+        """Yield the ClientSession to use for (user, upstream).
+
+        A shared upstream yields the single startup session (kept open). A
+        `per_user: true` upstream opens a fresh connection with the caller's own
+        on-behalf-of credential, yields it, and closes it when the call is done,
+        all within this task so nothing crosses an anyio cancel scope. That means
+        one connection per call for per-user upstreams; connection pooling is a
+        planned optimization.
+        """
+        spec = self.cfg.get("upstreams", {}).get(upstream, {})
+        if not spec.get("per_user"):
+            yield self.sessions.get(upstream)
+            return
+        cred = await asyncio.to_thread(credentials.resolve, spec, user, upstream)
+        async with contextlib.AsyncExitStack() as sstack:
+            if "url" in spec:
+                read, write = await self._connect_http(sstack, spec, extra_headers=cred.headers)
+            else:
+                read, write = await self._connect_stdio(sstack, spec, extra_env=cred.env)
+            session = await sstack.enter_async_context(ClientSession(read, write))
+            await session.initialize()
+            yield session
 
     async def list_tools(self, ctx, params) -> types.ListToolsResult:
         tools: list[types.Tool] = []
@@ -321,16 +359,23 @@ class Proxy:
             return self._refuse(pre.explain())
 
         upstream, _, tool = name.partition(SEP)
-        session = self.sessions.get(upstream)
-        if session is None:
-            return self._refuse(f"Unknown upstream {upstream!r}.")
         # For an upstream that impersonates the caller (e.g. Drive with domain-wide
         # delegation), forward the caller's identity as a trusted argument. The
         # proxy sets it, overriding anything the model supplied, so the assistant
         # can never choose whose permissions it acts under.
         if self.cfg.get("upstreams", {}).get(upstream, {}).get("impersonate"):
             args = {**args, "acting_user": self.user}
-        result = await session.call_tool(tool, args)
+        try:
+            # Per-user upstreams open a connection with the caller's own resolved
+            # credential (on-behalf-of); shared upstreams reuse the one session.
+            async with self._upstream_session(self.user, upstream) as session:
+                if session is None:
+                    return self._refuse(f"Unknown upstream {upstream!r}.")
+                result = await session.call_tool(tool, args)
+        except Exception as e:
+            self.audit.emit(user=self.user, tool=name, domain=domain, stage="pre", write=is_write,
+                            decision="deny", rule="obo-credential", evidence={"error": str(e)[:200]})
+            return self._refuse(f"Could not reach {upstream!r} on your behalf: {e}")
 
         # --- Layer 3/4, after the fetch ------------------------------------
         text = "\n".join(c.text for c in result.content if isinstance(c, types.TextContent))

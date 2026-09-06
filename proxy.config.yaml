@@ -149,6 +149,16 @@ upstreams:
   #   url: https://mcp.example.com/ops/mcp
   #   headers:
   #     Authorization: "Bearer ${OPS_MCP_TOKEN}"
+  # On-behalf-of: each caller reaches this upstream with their own credential,
+  # resolved per request, so the upstream sees the actual person. See the
+  # "Per-user access" section in the README.
+  # drive:
+  #   command: python3
+  #   args: [-m, aggrete.connectors.drive, --credentials, /opt/aggrete/sa.json, --root, Northwind]
+  #   per_user: true
+  #   obo:
+  #     command: [/opt/aggrete/obo.sh]   # prints {"env": {...}} or {"headers": {...}}
+  #     # users: {sam@corp: {env: {GOOGLE_DELEGATED_USER: sam@corp}}}   # or a static map
 
 # Tool name (upstream__tool) -> domain used by coc.yaml rules.
 # Order matters: first match wins.
