@@ -599,6 +599,14 @@ async def main() -> None:
         run()
         return
 
+    if not Path(args.config).exists():
+        print(
+            f"aggrete: no config file at {args.config!r}.\n\n"
+            f"  Try the demo (no config needed):   aggrete --demo\n"
+            f"  Point it at your own config:       aggrete --config /path/to/proxy.config.yaml\n"
+            f"  Get started in 15 minutes:         https://aggrete.com/guide",
+            file=sys.stderr)
+        raise SystemExit(1)
     cfg = yaml.safe_load(Path(args.config).read_text())
     root = Path(args.config).parent
     cfg["_config_dir"] = str(root)

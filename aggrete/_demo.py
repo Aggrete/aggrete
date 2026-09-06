@@ -1,10 +1,10 @@
 """`aggrete --demo`: a self-contained walkthrough.
 
 Runs four reasonable-looking questions through the real policy engine and prints
-the decisions. No config file, no auth, no network. The fourth question
-completes a picture COC-HR-004 forbids and is refused before any upstream would
-be contacted. This is what the four-question story on aggrete.com looks like,
-running locally.
+the decisions, then (in a terminal) drops into an interactive menu so you can try
+scenarios yourself and watch Aggrete allow, alert, or refuse. No config file, no
+auth, no network. The fourth question completes a picture COC-HR-004 forbids and
+is refused before any upstream would be contacted.
 """
 from __future__ import annotations
 
@@ -15,6 +15,8 @@ import tempfile
 from .accumulator import MemoryStore
 from .policy import Engine
 
+# A compact policy covering one rule of each interesting kind, so the interactive
+# menu below can demonstrate the whole range without a config file.
 _POLICY = """
 version: 1
 defaults: {window: 24h}
@@ -27,34 +29,72 @@ rules:
       If this is sanctioned workforce planning, request a purpose-bound session
       from HR Privacy. It is time-limited and every retrieval is logged.
     enforce:
-      - action: deny
-        type: domain_join
-        domains: [hr-personnel, finance-comp, ops-rota]
-        require_entity_overlap: true
-        window: 4h
-    tests:
-      - {name: allow, expect: allow, sequence: [{domain: finance-comp, entities: [p:a]}]}
-      - name: deny
-        expect: deny
-        sequence:
-          - {domain: finance-comp, entities: [p:a]}
-          - {domain: hr-personnel, entities: [p:a]}
-          - {domain: ops-rota, entities: [p:a]}
+      - {action: deny, type: domain_join, domains: [hr-personnel, finance-comp, ops-rota], require_entity_overlap: true, window: 4h}
   - rule_id: COC-HR-011
     clause: Bulk lists of identifiable people may not be assembled from personnel records.
+    remediation: Bulk personnel extracts go through People Analytics, who scope the export to the question.
     enforce:
       - {action: alert, type: entity_budget, domain: hr-personnel, max_distinct: 8, window: 24h}
-    tests:
-      - {name: allow, expect: allow, sequence: [{domain: hr-personnel, entities: [p:a]}]}
-      - {name: alert, expect: alert, sequence: [{domain: hr-personnel, entities: [p:a, p:b, p:c, p:d, p:e, p:f, p:g, p:h, p:i]}]}
+  - rule_id: COC-HR-031
+    clause: Pay figures that describe fewer than ten people are individual pay and may not be disclosed.
+    remediation: Ask for a larger category, a whole job family or location.
+    enforce:
+      - {action: deny, type: min_group, domain: pay-aggregates, k: 10, window: 24h}
+  - rule_id: COC-HR-021
+    clause: >
+      Records of colleagues' working time may not be used to benchmark individuals
+      against one another, including against oneself, outside a sanctioned review.
+    remediation: Reviewing your own team is fine; for a sanctioned comparison ask HR Privacy for a purpose-bound session.
+    enforce:
+      - {action: deny, type: self_comparison, domain: timesheets, window: 24h}
+  - rule_id: COC-SEC-002
+    clause: Once an assistant has read untrusted content it may not then reach a tool that can send data out.
+    remediation: Start a fresh session that has not read untrusted content, or ask Security to review the flow.
+    enforce:
+      - {action: deny, type: flow, taint_domains: [untrusted-web], egress_domains: [external-share]}
+  - rule_id: COC-MGMT-001
+    clause: Restructuring plans are confidential until announced and may not be retrieved before the announcement date.
+    remediation: The announcement date is set by the CEO office; nothing is available earlier.
+    enforce:
+      - {action: deny, type: wall, domains: [restructuring-plan], until: 2099-01-01}
+  - rule_id: COC-SEC-001
+    clause: Secret stores, credentials and key vaults are never available to assistants.
+    remediation: The secret store is not reachable through assistants. Use your normal break-glass process.
+    enforce:
+      - {action: deny, type: domain_block, domains: [secrets-store]}
 """
 
+_USER = "manager@example.com"
+
+# The scripted opener: four reasonable-looking requests, the last one refused.
 _SEQUENCE = [
     ("Q3 headcount plan",   "finance-planning", []),
     ("Backfill-only roles", "finance-comp",     ["p:alice", "p:bob"]),
     ("Recent joiners",      "hr-personnel",     ["p:alice", "p:bob", "p:carol", "p:dan",
                                                  "p:erin", "p:finn", "p:gwen", "p:hank", "p:ivy", "p:jane"]),
     ("On-call gaps",        "ops-rota",         ["p:alice"]),
+]
+
+# Interactive menu: (label, steps) where each step is (domain, is_write, entities).
+_SCENARIOS = [
+    ("Build a layoff list  (personnel + budget + rota, same people)",
+     [("finance-comp", False, ["p:a", "p:b"]),
+      ("hr-personnel", False, ["p:a", "p:b"]),
+      ("ops-rota", False, ["p:a"])]),
+    ("Pull a bulk roster of people",
+     [("hr-personnel", False, [f"p:{n}" for n in range(9)])]),
+    ("Ask pay for a small team",
+     [("pay-aggregates", False, ["p:a", "p:b", "p:c"])]),
+    ("Compare your hours to a colleague's",
+     [("timesheets", False, [f"p:{_USER}"]),
+      ("timesheets", False, ["p:colleague@example.com"])]),
+    ("Read an untrusted web page, then post out",
+     [("untrusted-web", False, []),
+      ("external-share", True, [])]),
+    ("Open the embargoed restructuring plan",
+     [("restructuring-plan", False, [])]),
+    ("Reach the secret store",
+     [("secrets-store", False, [])]),
 ]
 
 
@@ -69,21 +109,24 @@ def run() -> None:
         path = f.name
     try:
         eng = Engine(path, MemoryStore())
+        _story(eng, c)
+        if sys.stdin.isatty() and sys.stdout.isatty():
+            _interactive(eng, c)
     finally:
         try:
             os.unlink(path)
         except OSError:
             pass
 
-    user = "manager@example.com"
+
+def _story(eng, c) -> None:
     print()
     print("  " + c("1", "aggrete demo") + c("90", "  four questions, one afternoon"))
     print("  " + c("90", "  one manager, four reasonable-looking requests"))
     print()
-
     denied = False
     for label, domain, ents in _SEQUENCE:
-        pre = eng.pre_call(user, domain)
+        pre = eng.pre_call(_USER, domain)
         if not pre.allow:
             print("  " + c("90", ">") + f" {label:<24} " + c("41;97", " deny "))
             print("     " + c("31", f"{pre.rule_id}. " + " ".join((pre.clause or "").split())))
@@ -91,7 +134,7 @@ def run() -> None:
             print("     " + c("90", " ".join((pre.remediation or "").split())))
             denied = True
             break
-        post = eng.post_call(user, domain, ents)
+        post = eng.post_call(_USER, domain, ents)
         if not post.allow:
             print("  " + c("90", ">") + f" {label:<24} " + c("41;97", " deny "))
             print("     " + c("31", f"{post.rule_id}. " + " ".join((post.clause or "").split())))
@@ -104,5 +147,38 @@ def run() -> None:
     print()
     if denied:
         print("  " + c("90", "The forbidden combination was blocked before any data was fetched."))
-    print("  " + c("90", "Run it for real:  https://github.com/aggrete/aggrete"))
-    print()
+
+
+def _interactive(eng, c) -> None:
+    badge = {"allow": c("42;30", " allow "), "alert": c("43;30", " alert "), "deny": c("41;97", " deny ")}
+    while True:
+        print()
+        print("  " + c("1", "Try it yourself.") + c("90", "  Each runs through the real engine; nothing is fetched."))
+        for i, (label, _steps) in enumerate(_SCENARIOS, 1):
+            print("    " + c("36", str(i)) + f"  {label}")
+        print("    " + c("36", "q") + "  quit")
+        try:
+            choice = input("\n  " + c("90", "pick a scenario: ")).strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return
+        if choice in ("q", "quit", "exit"):
+            return
+        if not choice.isdigit() or not (1 <= int(choice) <= len(_SCENARIOS)):
+            continue
+        label, steps = _SCENARIOS[int(choice) - 1]
+        sim = [{"domain": d, "write": w, "entities": e} for d, w, e in steps]
+        results, blocked = eng.simulate(sim, _USER)
+        print()
+        print("  " + c("1", label))
+        for r in results:
+            d = r["decision"]
+            line = "    " + c("90", "->") + f" {r['step']['domain']:<20} " + badge[r["verdict"]]
+            if r["verdict"] == "deny":
+                line += "  " + c("31", d.rule_id or "")
+            print(line)
+            if r["verdict"] == "deny":
+                print("       " + c("31", " ".join((d.clause or "").split())))
+                print("       " + c("90", "Fix: " + " ".join((d.remediation or "").split())))
+        if blocked is None:
+            print("    " + c("90", "allowed end to end."))

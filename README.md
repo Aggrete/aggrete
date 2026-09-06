@@ -36,7 +36,7 @@ Or clone this repo to get the demo, sample policy and Helm chart.
 
 ## What the proxy does
 
-- **Try it in one command:** `aggrete --demo` (or `docker run --rm ghcr.io/aggrete/aggrete --demo`) runs the four-question walkthrough with no config, auth, or network.
+- **Try it in one command:** `aggrete --demo` (or `docker run --rm ghcr.io/aggrete/aggrete --demo`) runs the four-question walkthrough with no config, auth, or network, then drops into an interactive menu so you can try scenarios (a forbidden combination, individual pay, comparing colleagues, the prompt-injection shield, a wall, a blocked store) and watch each decision.
 - Refuses forbidden calls **before** the upstream is contacted, using a YAML
   policy and per-user memory that accumulates across calls and sessions.
 - **Ask before you act:** a built-in `check` tool dry-runs a proposed sequence of
