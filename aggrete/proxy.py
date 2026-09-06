@@ -580,11 +580,19 @@ def build_http_app(server: Server, cfg: dict, connect):
     else:
         verifier = build_verifier(auth_cfg)
     http_cfg = cfg.get("http", {})
+    allowed_hosts = http_cfg.get("allowed_hosts", [])
+    # DNS-rebinding protection turns on automatically once you pin `allowed_hosts`
+    # (there is nothing to check the Host header against until then), and an
+    # explicit `dns_rebinding_protection:` always wins. Pinning the host you serve
+    # on is recommended; it is defense in depth on top of the mandatory bearer auth.
+    dns_rebind = http_cfg.get("dns_rebinding_protection")
+    if dns_rebind is None:
+        dns_rebind = bool(allowed_hosts)
     manager = StreamableHTTPSessionManager(
         app=server, json_response=bool(http_cfg.get("json_response", False)),
         security_settings=TransportSecuritySettings(
-            enable_dns_rebinding_protection=bool(http_cfg.get("dns_rebinding_protection", False)),
-            allowed_hosts=http_cfg.get("allowed_hosts", []), allowed_origins=http_cfg.get("allowed_origins", [])),
+            enable_dns_rebinding_protection=bool(dns_rebind),
+            allowed_hosts=allowed_hosts, allowed_origins=http_cfg.get("allowed_origins", [])),
         session_idle_timeout=http_cfg.get("session_idle_timeout", 1800),
     )
 

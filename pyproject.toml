@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aggrete"
-version = "0.8.0"
+version = "0.8.1"
 description = "An MCP proxy that enforces your code of conduct across connectors. Permission is not need-to-know."
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -24,7 +24,7 @@ dependencies = [
   "pyjwt[crypto]>=2.8",
   "starlette>=0.40",
   "uvicorn>=0.30",
-  "python-multipart>=0.0.9",
+  "python-multipart>=0.0.18",
 ]
 
 [project.optional-dependencies]

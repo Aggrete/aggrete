@@ -30,6 +30,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 from dataclasses import dataclass, field
 
 
@@ -72,13 +73,19 @@ def resolve(spec: dict, user: str, upstream: str) -> Credential | None:
                 cmd, capture_output=True, text=True, timeout=int(obo.get("timeout", 10)),
                 env={**os.environ, "AGGRETE_USER": user, "AGGRETE_UPSTREAM": upstream})
         except (OSError, subprocess.TimeoutExpired) as e:
-            raise RuntimeError(f"obo command for {user} at {upstream} did not run: {e}")
+            print(f"aggrete: obo command for {upstream!r} did not run: {e}", file=sys.stderr)
+            raise RuntimeError(f"credential resolution failed for upstream {upstream!r}")
         if out.returncode != 0:
-            raise RuntimeError(f"obo command for {user} at {upstream} failed: {out.stderr.strip()[:200]}")
+            # The command's stderr may carry a token or a vault error; log it for
+            # the operator, never return it to the caller.
+            print(f"aggrete: obo command for {upstream!r} exited {out.returncode}: "
+                  f"{out.stderr.strip()[:500]}", file=sys.stderr)
+            raise RuntimeError(f"credential resolution failed for upstream {upstream!r}")
         try:
             data = json.loads(out.stdout or "{}")
-        except ValueError as e:
-            raise RuntimeError(f"obo command for {user} at {upstream} returned invalid JSON: {e}")
+        except ValueError:
+            print(f"aggrete: obo command for {upstream!r} returned invalid JSON", file=sys.stderr)
+            raise RuntimeError(f"credential resolution failed for upstream {upstream!r}")
         return Credential(env=dict(data.get("env") or {}), headers=dict(data.get("headers") or {}))
 
     # Default: hand the connector the caller's identity so it can delegate.

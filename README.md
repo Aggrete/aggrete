@@ -170,6 +170,10 @@ that must all hold in `deny_when:` (operators: `equals`, `in`, `regex`, `gt`,
       action: deny
 ```
 
+The `regex` operator runs your pattern against model-supplied argument values, so
+keep patterns simple and anchored (avoid nested quantifiers) to sidestep
+catastrophic backtracking.
+
 Actions: `deny`, `alert`. Start everything at `alert`, tune against real traffic, then flip.
 
 ## How it works
