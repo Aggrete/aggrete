@@ -407,3 +407,7 @@ owner named in the rule.
 - **Not a gateway.** No multi-tenancy, no token vault, no HA. For production,
   port this policy engine onto agentgateway or IBM ContextForge as a plugin
   rather than running it as your control plane.
+
+---
+
+<sub>mcp-name: io.github.Aggrete/aggrete</sub>
