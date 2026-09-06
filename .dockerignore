@@ -6,5 +6,4 @@ audit.jsonl
 site
 deploy
 tests
-demo
 .pytest_cache
