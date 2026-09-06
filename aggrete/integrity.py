@@ -55,16 +55,38 @@ def scan_poison(description: str | None) -> list[str]:
 
 
 class PinStore:
-    """Trust-on-first-use fingerprints, persisted as JSON `{tool_name: sha256}`."""
+    """Trust-on-first-use fingerprints, persisted as JSON `{tool_name: sha256}`.
+
+    The file is re-read lazily when it changes on disk, so an operator re-pinning
+    a tool (for example from the console, which rewrites this file) takes effect
+    on the running proxy without a restart.
+    """
 
     def __init__(self, path: str | None):
         self.path = Path(path) if path else None
         self._pins: dict[str, str] = {}
-        if self.path and self.path.exists():
-            try:
-                self._pins = {k: str(v) for k, v in json.loads(self.path.read_text()).items()}
-            except (OSError, ValueError):
-                self._pins = {}
+        self._mtime = 0.0
+        self._load()
+
+    def _load(self) -> None:
+        if not self.path or not self.path.exists():
+            self._pins = {}
+            return
+        try:
+            self._mtime = self.path.stat().st_mtime
+            self._pins = {k: str(v) for k, v in json.loads(self.path.read_text()).items()}
+        except (OSError, ValueError):
+            self._pins = {}
+
+    def _maybe_reload(self) -> None:
+        if not self.path:
+            return
+        try:
+            mtime = self.path.stat().st_mtime
+        except OSError:
+            return
+        if mtime != self._mtime:
+            self._load()
 
     def check(self, name: str, fp: str) -> str:
         """Classify a tool against its pin: 'new', 'same', or 'changed'.
@@ -73,6 +95,7 @@ class PinStore:
         tool is left pinned to its original value so the change keeps firing until
         someone re-pins it deliberately with `repin`.
         """
+        self._maybe_reload()
         prior = self._pins.get(name)
         if prior is None:
             self._pins[name] = fp
@@ -82,6 +105,7 @@ class PinStore:
 
     def repin(self, name: str, fp: str) -> None:
         """Accept the current fingerprint as the new baseline."""
+        self._maybe_reload()
         self._pins[name] = fp
         self._save()
 
@@ -91,6 +115,7 @@ class PinStore:
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
             self.path.write_text(json.dumps(self._pins, indent=2, sort_keys=True))
+            self._mtime = self.path.stat().st_mtime   # our own write is not a reload trigger
         except OSError:
             pass
 

@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import datetime
+import fnmatch
 import os
+import re
 import time
 
 from dataclasses import dataclass, field
@@ -22,7 +24,50 @@ VALID_ENFORCE_TYPES = frozenset({
     "entity_budget",
     "flow",
     "domain_block",
+    "arg_match",
 })
+
+
+def _arg_matches(conds: list, args: dict) -> bool:
+    """True if ALL argument conditions hold. Each condition names an `arg` and one
+    operator: equals, in, regex, gt, lt, exists, or missing. Unknown operators do
+    not match, so a misconfigured condition fails safe (it does not deny)."""
+    if not conds:
+        return False
+    for c in conds:
+        name = c.get("arg")
+        present = name in args
+        val = args.get(name)
+        if "exists" in c:
+            if bool(present) != bool(c["exists"]):
+                return False
+        elif "missing" in c:
+            if present != (not c["missing"]):
+                return False
+        elif "equals" in c:
+            if str(val) != str(c["equals"]):
+                return False
+        elif "in" in c:
+            if val not in (c["in"] or []):
+                return False
+        elif "regex" in c:
+            if val is None or not re.search(str(c["regex"]), str(val)):
+                return False
+        elif "gt" in c:
+            try:
+                if not float(val) > float(c["gt"]):
+                    return False
+            except (TypeError, ValueError):
+                return False
+        elif "lt" in c:
+            try:
+                if not float(val) < float(c["lt"]):
+                    return False
+            except (TypeError, ValueError):
+                return False
+        else:
+            return False
+    return True
 
 
 @dataclass
@@ -253,6 +298,29 @@ class Engine:
                     {"completes": e["domains"], "already_held": already,
                      "shared_entities": sorted(overlap)[:10]},
                 )
+        return Decision(allow=True)
+
+    def check_args(self, user: str, tool: str, args: dict, store: Store | None = None) -> Decision:
+        """Decide a call from the *arguments*, not just its type: the same tool can
+        be fine or forbidden depending on what it is asked to do (export your team
+        vs the whole company). `arg_match` rules name tool-name globs and a set of
+        argument conditions that must all hold to fire."""
+        store = self.store if store is None else store
+        for rule in self.rules:
+            if not self._active(rule):
+                continue
+            for e in rule.blocks("arg_match"):
+                pats = e.get("tools") or ["*"]
+                if not any(fnmatch.fnmatch(tool, p) for p in pats):
+                    continue
+                if not in_scope(e, user) or not _arg_matches(e.get("deny_when", []), args):
+                    continue
+                if e.get("action", "deny") != "deny":
+                    return Decision(allow=True, rule_id=rule.id,
+                                    alerts=[{"rule_id": rule.id, "tool": tool}])
+                if purpose := store.granted(user, rule.id):
+                    return Decision(allow=True, rule_id=rule.id, granted_purpose=purpose)
+                return self._deny(rule, {"tool": tool, "matched": e.get("deny_when")})
         return Decision(allow=True)
 
     def tool_visible(self, user: str, domain: str | None) -> bool:

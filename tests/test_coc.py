@@ -40,9 +40,23 @@ def cases():
             yield pytest.param(rule.id, t, id=f"{rule.id}-{t['name']}")
 
 
+def run_args(tool, args, user: str = "test@example.com") -> str:
+    engine = Engine(COC, MemoryStore())
+    for _p in engine.pack_meta:
+        engine.set_pack(_p["id"], True)
+    d = engine.check_args(user, tool, args or {})
+    if not d.allow:
+        return "deny"
+    return "alert" if d.alerts else "allow"
+
+
 @pytest.mark.parametrize("rule_id,case", list(cases()))
 def test_clause(rule_id, case):
-    assert run_sequence(case["sequence"], case.get("user", "test@example.com")) == case["expect"]
+    user = case.get("user", "test@example.com")
+    if "sequence" in case:
+        assert run_sequence(case["sequence"], user) == case["expect"]
+    else:   # an arg_match rule test: {tool, args, expect}
+        assert run_args(case["tool"], case.get("args"), user) == case["expect"]
 
 
 def test_every_rule_has_positive_and_negative_coverage():

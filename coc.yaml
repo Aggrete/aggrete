@@ -583,3 +583,26 @@ rules:
     tests:
       - {name: reading_external_share_is_fine, expect: allow, sequence: [{domain: external-share, entities: []}]}
       - {name: writing_external_share_is_blocked, expect: deny, sequence: [{domain: external-share, write: true, entities: []}]}
+
+  # ---- Argument-level: same tool, different scope ----
+  - rule_id: COC-DATA-010
+    pack: code-of-conduct
+    title: Company-wide exports
+    clause: >
+      Bulk exports are limited to your own team. A company-wide or all-records
+      export may not be performed by an assistant.
+    owner: data-governance@example.com
+    severity: high
+    remediation: >
+      Export with a team-level scope, or ask Data Governance for a scoped extract
+      through the normal request process.
+    enforce:
+      - layer: retrieval
+        action: deny
+        type: arg_match
+        tools: ["*__export*", "*bulk_export*"]
+        deny_when:
+          - {arg: scope, in: [all, company, everyone]}
+    tests:
+      - {name: team_scoped_export_is_fine, expect: allow, tool: crm__export, args: {scope: team}}
+      - {name: company_wide_export_is_refused, expect: deny, tool: crm__export, args: {scope: all}}

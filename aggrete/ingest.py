@@ -216,14 +216,18 @@ def verify(coc: dict) -> list[str]:
             engine, user, outcome = Engine(tmp, MemoryStore()), t.get("user", "t@example.com"), "allow"
             for _p in engine.pack_meta:        # a rule's tests validate regardless of its pack's default state
                 engine.set_pack(_p["id"], True)
-            for step in t["sequence"]:
-                if not engine.pre_call(user, step["domain"], is_write=step.get("write", False)).allow:
-                    outcome = "deny"; break
-                post = engine.post_call(user, step["domain"], [f"p:{user}" if x == "p:self" else x for x in step.get("entities", [])])
-                if not post.allow:
-                    outcome = "deny"; break
-                if post.alerts:
-                    outcome = "alert"
+            if "sequence" in t:
+                for step in t["sequence"]:
+                    if not engine.pre_call(user, step["domain"], is_write=step.get("write", False)).allow:
+                        outcome = "deny"; break
+                    post = engine.post_call(user, step["domain"], [f"p:{user}" if x == "p:self" else x for x in step.get("entities", [])])
+                    if not post.allow:
+                        outcome = "deny"; break
+                    if post.alerts:
+                        outcome = "alert"
+            else:   # an arg_match test: {tool, args, expect}
+                d = engine.check_args(user, t["tool"], t.get("args") or {})
+                outcome = "deny" if not d.allow else ("alert" if d.alerts else "allow")
             if outcome != t["expect"]:
                 failures.append(f"{rule.id}/{t['name']}: expected {t['expect']}, got {outcome}")
     return failures

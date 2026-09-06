@@ -28,6 +28,7 @@ REQUIRED = {
     "entity_budget": ["domain", "max_distinct"],
     "self_comparison": ["domain"],
     "flow": ["egress_domains"],   # taint_domains recommended; egress_on_write can stand in
+    "arg_match": ["deny_when"],   # tools defaults to all; deny_when is the predicate
 }
 HIGH = {"high", "critical"}
 

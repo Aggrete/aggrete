@@ -351,6 +351,14 @@ class Proxy:
                         f"({', '.join(hits)}). Aggrete does not forward credentials into tools. "
                         "Remove it and retry.")
 
+        # Argument-level rules: the same tool can be fine or forbidden depending
+        # on what it is asked to do (export your team vs the whole company).
+        argd = self.engine.check_args(self.user, name, args)
+        if not argd.allow:
+            self.audit.emit(user=self.user, tool=name, domain=domain, stage="pre", write=is_write,
+                            decision="deny", rule=argd.rule_id, evidence=argd.evidence)
+            return self._refuse(argd.explain())
+
         # --- Layer 3/4, before the fetch -----------------------------------
         pre = self.engine.pre_call(self.user, domain, is_write=is_write)
         if not pre.allow:

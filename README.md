@@ -154,7 +154,23 @@ subjects). `domain_join` and `domain_block` accept the same `allowed_users`,
 `blocked_users`, `since`, `until` scoping (quiet periods). `self_comparison`
 (the requester's own record plus colleagues' records in one domain. The
 precondition for "how do I compare"; decided post-call, since the colleague
-records have to be seen to be counted). Actions: `deny`, `alert`. Start everything at `alert`, tune against real traffic, then flip.
+records have to be seen to be counted). `arg_match` decides a call from its
+*arguments*, not just its type: the same tool is fine or forbidden depending on
+what it is asked to do. Name tool globs in `tools:` and the argument conditions
+that must all hold in `deny_when:` (operators: `equals`, `in`, `regex`, `gt`,
+`lt`, `exists`, `missing`).
+
+```yaml
+- rule_id: COC-DATA-010
+  clause: "Bulk exports are limited to your own team."
+  enforce:
+    - type: arg_match
+      tools: ["*__export*"]
+      deny_when: [{arg: scope, in: [all, company]}]   # export scope=team is fine
+      action: deny
+```
+
+Actions: `deny`, `alert`. Start everything at `alert`, tune against real traffic, then flip.
 
 ## How it works
 

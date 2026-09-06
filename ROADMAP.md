@@ -149,16 +149,17 @@ These already work in the open-source proxy today.
   [mcp#804](https://github.com/modelcontextprotocol/modelcontextprotocol/discussions/804)).
   Connection pooling for per-user sessions is the next optimization.
 
-## Next (in progress)
-
 - **Rules that look at the details of a request, not just its type.**
   Whether something is allowed can depend on the specifics, not only the kind of
   action.
   *For example:* let people export their own team's data, but not the whole
   company's. Same "export" action, different scope, different answer.
-  *Under the hood:* argument-level rule predicates. Answers the "a simple
+  *Under the hood:* the `arg_match` rule type decides a call from its arguments
+  (operators: equals, in, regex, gt, lt, exists, missing). Answers the "a simple
   read-only / read-write switch is useless" complaint
   ([HN](https://news.ycombinator.com/item?id=46696348)).
+
+## Next (in progress)
 
 - **Native OpenTelemetry, with retention and archive.**
   Basic SIEM streaming already ships (`audit_forward:`, above). What remains is
