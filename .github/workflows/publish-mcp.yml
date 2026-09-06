@@ -33,5 +33,17 @@ jobs:
           VERSION="${GITHUB_REF#refs/tags/v}"
           jq --arg v "$VERSION" '.version = $v | .packages[0].version = $v' server.json > server.tmp && mv server.tmp server.json
 
+      - name: Wait for the package version on PyPI
+        run: |
+          VERSION=$(jq -r '.version' server.json)
+          echo "waiting for aggrete $VERSION on PyPI (the registry validates it exists)..."
+          for i in $(seq 1 30); do
+            if curl -sSfL "https://pypi.org/pypi/aggrete/$VERSION/json" >/dev/null 2>&1; then
+              echo "aggrete $VERSION is on PyPI"; exit 0
+            fi
+            sleep 10
+          done
+          echo "timed out waiting for aggrete $VERSION on PyPI" >&2; exit 1
+
       - name: Publish server to the MCP Registry
         run: ./mcp-publisher publish
