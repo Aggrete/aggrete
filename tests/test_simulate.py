@@ -82,3 +82,19 @@ def test_simulate_does_not_touch_real_state():
     ], USER)
     # The dry run used a throwaway store; the engine's own accumulator is untouched.
     assert e.store.domains(USER) == set()
+
+
+def test_arg_match_previews_in_simulate():
+    # A step carrying tool+args runs the arg_match layer: company-wide export refused.
+    results, blocked = engine().simulate(
+        [{"domain": "unclassified", "tool": "crm__customer_export", "args": {"scope": "all"}}], USER)
+    assert blocked == 0
+    assert results[0]["verdict"] == "deny"
+    assert rule_at(results, 0) == "COC-CRM-001"
+
+
+def test_arg_match_scoped_export_is_fine_in_simulate():
+    results, blocked = engine().simulate(
+        [{"domain": "unclassified", "tool": "crm__customer_export", "args": {"scope": "team"}}], USER)
+    assert blocked is None
+    assert results[0]["verdict"] == "allow"

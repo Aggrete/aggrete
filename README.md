@@ -174,6 +174,10 @@ The `regex` operator runs your pattern against model-supplied argument values, s
 keep patterns simple and anchored (avoid nested quantifiers) to sidestep
 catastrophic backtracking.
 
+The built-in `check` tool previews `arg_match` rules too: pass an object instead
+of a bare tool name, e.g. `{"tool": "crm__export", "args": {"scope": "all"}}`, and
+the dry run reports the decision without fetching anything.
+
 Actions: `deny`, `alert`. Start everything at `alert`, tune against real traffic, then flip.
 
 ## How it works

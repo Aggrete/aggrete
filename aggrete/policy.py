@@ -437,6 +437,12 @@ class Engine:
             domain = step["domain"]
             is_write = bool(step.get("write", False))
             ents = list(step.get("entities", []))
+            tool = step.get("tool")
+            if tool and step.get("args"):
+                ad = self.check_args(user, tool, step["args"], store=sim)
+                if not ad.allow:
+                    results.append({"step": step, "verdict": "deny", "decision": ad})
+                    return results, i
             pre = self.pre_call(user, domain, is_write=is_write, store=sim)
             if not pre.allow:
                 results.append({"step": step, "verdict": "deny", "decision": pre})

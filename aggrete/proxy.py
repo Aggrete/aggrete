@@ -263,10 +263,20 @@ class Proxy:
                     "type": "object",
                     "properties": {
                         "tools": {
-                            "type": "array", "items": {"type": "string"},
+                            "type": "array",
+                            "items": {"oneOf": [
+                                {"type": "string"},
+                                {"type": "object",
+                                 "properties": {"tool": {"type": "string"},
+                                                "args": {"type": "object"}},
+                                 "required": ["tool"]},
+                            ]},
                             "description": ("The tool calls you are considering, in order, by their "
                                             "exact names on this server, e.g. [\"hr__recent_joiners\", "
-                                            "\"finance__budget_roles\", \"hr__leave_balance\"]."),
+                                            "\"finance__budget_roles\"]. To check a call by its "
+                                            "arguments (e.g. an export's scope), pass an object "
+                                            "instead of a name: {\"tool\": \"crm__export\", "
+                                            "\"args\": {\"scope\": \"all\"}}."),
                         },
                         "entities": {
                             "type": "array", "items": {"type": "string"},
@@ -447,10 +457,18 @@ class Proxy:
     def _run_check(self, args: dict) -> types.CallToolResult:
         """Dry-run a proposed plan against the policy and report the verdict,
         without fetching anything. The heart of 'would this be allowed?'."""
-        tools = args.get("tools") or []
-        if isinstance(tools, str):
-            tools = [tools]
-        tools = [str(t) for t in tools]
+        raw = args.get("tools") or []
+        if isinstance(raw, (str, dict)):
+            raw = [raw]
+        items = []
+        for it in raw:
+            if isinstance(it, dict):
+                nm = it.get("tool") or it.get("name")
+                if nm:
+                    items.append((str(nm), it.get("args") or {}))
+            else:
+                items.append((str(it), {}))
+        tools = [nm for nm, _ in items]
         if not tools:
             return self._refuse(
                 "check: pass `tools`, the list of tool calls you are considering, in order. "
@@ -464,10 +482,13 @@ class Proxy:
         probe = ([str(e) for e in supplied] if supplied
                  else [f"p:{user.strip().lower()}", "p:teammate@example.com"])
         steps = []
-        for name in tools:
+        for name, iargs in items:
             is_write = self._is_write(name)
-            steps.append({"tool": name, "domain": self.domain_for(name),
-                          "write": is_write, "entities": [] if is_write else probe})
+            step = {"tool": name, "domain": self.domain_for(name),
+                    "write": is_write, "entities": [] if is_write else probe}
+            if iargs:
+                step["args"] = iargs
+            steps.append(step)
 
         results, blocked_at = self.engine.simulate(steps, user)
         self.audit.emit(user=user, tool=CHECK_TOOL, domain="-", stage="check", write=False,
