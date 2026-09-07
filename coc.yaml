@@ -59,6 +59,24 @@ packs:
     example: "Out-of-region caller pulls EU HR data, blocked. (GDPR Ch. V)"
     watches: [eu-personal-data]
     enabled: false
+  - id: customer-data
+    name: Customer and CRM data
+    description: Keeps customer exports scoped to your own accounts and flags mass extraction of customer records.
+    example: "Export the whole customer base, refused; your team's accounts, fine."
+    watches: [crm-customers]
+    enabled: true
+  - id: pci-dss
+    name: PCI-DSS cardholder data
+    description: Keeps the cardholder-data environment away from assistants; card numbers are masked in results.
+    example: "Assistant reaches the card vault, refused. (PCI-DSS req. 3)"
+    watches: [cardholder-data, payment-ops]
+    enabled: false
+  - id: insider-trading
+    name: Insider trading and blackout windows
+    description: Blocks trading-restricted material during a blackout and keeps material non-public information away from trade execution.
+    example: "Restricted list during the quiet period, refused. (SEC Rule 10b5-1)"
+    watches: [trading-restricted, mnpi]
+    enabled: false
 
 rules:
   - rule_id: COC-HR-004
@@ -606,3 +624,139 @@ rules:
     tests:
       - {name: team_scoped_export_is_fine, expect: allow, tool: crm__export, args: {scope: team}}
       - {name: company_wide_export_is_refused, expect: deny, tool: crm__export, args: {scope: all}}
+
+  # ---- Protection pack: Customer and CRM data ----
+  - rule_id: COC-CRM-001
+    pack: customer-data
+    title: Customer exports are scoped to your accounts
+    clause: >
+      A customer export may cover your own team's accounts, not the whole
+      company's customer base.
+    owner: data-governance@example.com
+    severity: high
+    remediation: >
+      Export with scope=team. A full-base export goes through the analytics team,
+      who scope it to the question being asked.
+    enforce:
+      - layer: retrieval
+        action: deny
+        type: arg_match
+        tools: ["crm__export*", "*customer*export*", "*__bulk_export*"]
+        deny_when:
+          - {arg: scope, in: [all, company, everyone, global]}
+    tests:
+      - {name: team_scope_is_fine, expect: allow, tool: crm__export, args: {scope: team}}
+      - {name: whole_base_is_refused, expect: deny, tool: crm__export, args: {scope: all}}
+
+  - rule_id: COC-CRM-002
+    pack: customer-data
+    title: Mass extraction of customer records
+    clause: >
+      Assistants may not assemble large lists of customer records from the CRM
+      beyond what a single task requires.
+    owner: data-governance@example.com
+    severity: medium
+    remediation: >
+      Bulk customer extracts go through the analytics team, who scope the export
+      to the question being asked.
+    enforce:
+      - layer: accumulation
+        action: alert          # illustrative threshold; tune to your CRM
+        type: entity_budget
+        domain: crm-customers
+        max_distinct: 12
+        scope: user
+        window: 24h
+    tests:
+      - {name: small_lookup_is_fine, expect: allow, sequence: [{domain: crm-customers, entities: [p:a, p:b]}]}
+      - name: mass_extract_alerts
+        expect: alert
+        sequence:
+          - {domain: crm-customers, entities: [p:c1, p:c2, p:c3, p:c4, p:c5, p:c6, p:c7, p:c8, p:c9, p:c10, p:c11, p:c12, p:c13]}
+
+  # ---- Protection pack: PCI-DSS cardholder data ----
+  - rule_id: COC-PCI-001
+    pack: pci-dss
+    title: Cardholder data is off-limits to assistants
+    clause: >
+      The cardholder-data environment (primary account numbers and related data)
+      is never available to assistants.
+    owner: security@example.com
+    severity: critical
+    remediation: >
+      Cardholder data is out of scope for assistants; card numbers in results are
+      masked. Use your PCI-compliant tooling directly.
+    enforce:
+      - layer: retrieval
+        action: deny
+        type: domain_block
+        domains: [cardholder-data]
+    tests:
+      - {name: normal_work_is_fine, expect: allow, sequence: [{domain: crm-customers, entities: []}]}
+      - {name: card_vault_is_blocked, expect: deny, sequence: [{domain: cardholder-data, entities: []}]}
+
+  - rule_id: COC-PCI-002
+    pack: pci-dss
+    title: Payment operations are limited to the payments team
+    clause: >
+      Payment-processing operations are available only to the payments team.
+    owner: security@example.com
+    severity: high
+    remediation: Confirm your access with the payments team.
+    enforce:
+      - layer: retrieval
+        action: deny
+        type: wall
+        domains: [payment-ops]
+        allowed_users: [payments@example.com]
+    tests:
+      - {name: payments_team_may_reach, expect: allow, user: payments@example.com, sequence: [{domain: payment-ops, entities: []}]}
+      - {name: others_may_not, expect: deny, sequence: [{domain: payment-ops, entities: []}]}
+
+  # ---- Protection pack: Insider trading and blackout windows ----
+  - rule_id: COC-TRADE-001
+    pack: insider-trading
+    title: Trading-restricted material during a blackout
+    clause: >
+      Material on the restricted or blackout list may not be retrieved by anyone
+      outside Compliance during a blackout window.
+    owner: compliance@example.com
+    severity: critical
+    remediation: The blackout window is set by Compliance; nothing is available earlier.
+    enforce:
+      - layer: retrieval
+        action: deny
+        type: wall
+        domains: [trading-restricted]
+        allowed_users: [compliance@example.com]
+        until: 2099-01-01
+    tests:
+      - {name: compliance_may_read, expect: allow, user: compliance@example.com, sequence: [{domain: trading-restricted, entities: []}]}
+      - {name: everyone_else_waits, expect: deny, sequence: [{domain: trading-restricted, entities: []}]}
+
+  - rule_id: COC-TRADE-002
+    pack: insider-trading
+    title: Material non-public information must not reach trade execution
+    clause: >
+      Material non-public information may not be combined with trade-execution
+      tools through an assistant.
+    owner: compliance@example.com
+    severity: critical
+    remediation: >
+      Deal-side material and trade execution stay separated. Confirm your side of
+      the wall with Compliance.
+    enforce:
+      - layer: accumulation
+        action: deny
+        type: domain_join
+        domains: [mnpi, trade-execution]
+        require_entity_overlap: false
+        scope: user
+        window: 24h
+    tests:
+      - {name: mnpi_alone_is_fine, expect: allow, sequence: [{domain: mnpi, entities: []}]}
+      - name: mnpi_then_execution_is_refused
+        expect: deny
+        sequence:
+          - {domain: mnpi, entities: []}
+          - {domain: trade-execution, entities: []}
